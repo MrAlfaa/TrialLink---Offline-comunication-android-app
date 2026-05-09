@@ -1,0 +1,45 @@
+{
+  "name": "traillink-backend",
+  "version": "1.0.0",
+  "description": "Node.js backend foundation for TrailLink Phase 01.",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "test:phase02": "node scripts/phase02-api-smoke.js",
+    "test:phase03": "node scripts/phase03-chat-smoke.js",
+    "test:phase09": "node scripts/phase09-emergency-smoke.js",
+    "test:phase10": "node scripts/phase10-location-smoke.js",
+    "test:phase12": "node scripts/phase12-voice-smoke.js",
+    "test:phase13e": "node scripts/phase13e-bridge-smoke.js",
+    "test:phase13f": "node scripts/phase13f-identity-bootstrap-smoke.js",
+    "test:phase13g": "node scripts/phase13g-group-member-management-smoke.js",
+    "test:phase13h": "node scripts/phase13h-chat-media-smoke.js"
+  },
+  "keywords": [
+    "traillink",
+    "express",
+    "mongodb",
+    "outdoor-safety"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-validator": "^7.2.1",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.9.5",
+    "morgan": "^1.10.0",
+    "multer": "^2.0.2",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
