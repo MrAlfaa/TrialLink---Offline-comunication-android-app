@@ -8,13 +8,6 @@ coverage/
 
 # Environment
 .env
-backend/.env
-
-# Node
-backend/node_modules/
-backend/npm-debug.log*
-backend/yarn-debug.log*
-backend/yarn-error.log*
 backend/server.*.log
 
 # IDE/OS

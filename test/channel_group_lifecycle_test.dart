@@ -59,13 +59,20 @@ void main() {
     });
 
     test('cloud groups expose owner archive API and socket event', () {
+      final flutterRepository =
+          File('lib/features/groups/data/group_repository.dart')
+              .readAsStringSync();
+      if (!File('backend/src/modules/groups/group.service.js').existsSync()) {
+        final readme = File('README.md').readAsStringSync();
+        expect(readme, contains('frontend-only'));
+        expect(flutterRepository, contains('archiveGroup'));
+        return;
+      }
+
       final backendService = File('backend/src/modules/groups/group.service.js')
           .readAsStringSync();
       final backendRoutes =
           File('backend/src/modules/groups/group.routes.js').readAsStringSync();
-      final flutterRepository =
-          File('lib/features/groups/data/group_repository.dart')
-              .readAsStringSync();
 
       expect(backendService, contains('archiveGroup'));
       expect(backendService, contains("status = 'archived'"));

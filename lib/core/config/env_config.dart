@@ -36,5 +36,11 @@ class EnvConfig {
 
   static String get appEnv => dotenv.env['APP_ENV'] ?? 'development';
 
+  static bool get frontendOnlyDemo {
+    final value = dotenv.env['APP_FRONTEND_ONLY']?.trim().toLowerCase();
+    if (value == null || value.isEmpty) return true;
+    return value == 'true' || value == '1' || value == 'yes' || value == 'on';
+  }
+
   static bool get isConfigured => apiBaseUrl.trim().isNotEmpty;
 }
