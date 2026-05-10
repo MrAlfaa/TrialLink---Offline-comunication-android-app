@@ -44,6 +44,9 @@ void main() {
       expect(source,
           contains('Future<void> switchActiveChannel(String channelId)'));
       expect(source, contains('Future<void> switchActiveChat(String chatId)'));
+      expect(source, contains('joinOfflineChannelAsActiveTrip'));
+      expect(source, contains('activateOfflineChannelAsTrip'));
+      expect(source, contains('_reconcileGloballyActiveChannel'));
       expect(source, contains("'status': 'inactive'"));
       expect(source, contains("'is_active': 0"));
     });
@@ -60,6 +63,30 @@ void main() {
       expect(tripSource, contains('activeTripContextProvider.future'));
       expect(channelSource, contains('activeTripContextProvider.future'));
       expect(channelSource, contains('switchActiveChannel(channelId)'));
+    });
+
+    test('join paths use canonical trip context activation', () {
+      final channelController = File(
+              'lib/features/offline_channel/presentation/offline_channel_controller.dart')
+          .readAsStringSync();
+      final joinScreen = File(
+        'lib/features/offline_channel/presentation/join_offline_channel_screen.dart',
+      ).readAsStringSync();
+      final tripSetup =
+          File('lib/features/trip/presentation/trip_setup_screen.dart')
+              .readAsStringSync();
+      final tripWizard = File(
+        'lib/features/trip/presentation/trip_setup_wizard_screen.dart',
+      ).readAsStringSync();
+
+      expect(channelController, contains('joinOfflineChannelAsActiveTrip'));
+      expect(joinScreen, contains('activeTripContextProvider'));
+      expect(tripSetup, contains('joinOfflineChannelAsActiveTrip'));
+      expect(tripWizard, contains('joinOfflineChannelAsActiveTrip'));
+      expect(
+        channelController,
+        isNot(contains('_tripSessionRepository.activateOfflineChannelTrip')),
+      );
     });
 
     test('trip, channel, chat, and message models preserve context IDs', () {

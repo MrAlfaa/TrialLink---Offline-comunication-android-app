@@ -6,7 +6,6 @@ import '../../../core/identity/local_identity_repository.dart';
 import '../../../core/identity/local_identity_model.dart';
 import '../../nearby/presentation/nearby_controller.dart';
 import '../../trip_context/data/trip_context_service.dart';
-import '../../trip/data/trip_session_repository.dart';
 import '../data/active_offline_channel_resolver.dart';
 import '../data/models/offline_channel_member_model.dart';
 import '../data/models/offline_channel_model.dart';
@@ -91,13 +90,11 @@ class OfflineChannelController
   OfflineChannelController(
     this._repository,
     this._identityRepository,
-    this._tripSessionRepository,
     this._tripContextService,
   ) : super(const OfflineChannelMutationState());
 
   final OfflineChannelRepository _repository;
   final LocalIdentityRepository _identityRepository;
-  final TripSessionRepository _tripSessionRepository;
   final TripContextService _tripContextService;
 
   Future<OfflineChannelModel?> createChannel({
@@ -137,22 +134,10 @@ class OfflineChannelController
   }) async {
     state = const OfflineChannelMutationState(isLoading: true);
     try {
-      final channel = user == null
-          ? await _repository.joinChannelForIdentity(
-              identity: await _requireLocalIdentity(),
-              channelCode: channelCode,
-            )
-          : await _repository.joinChannel(
-              user: user,
-              channelCode: channelCode,
-            );
-      final identity = await _identityRepository.getCurrentIdentity();
-      if (identity != null) {
-        await _tripSessionRepository.activateOfflineChannelTrip(
-          channel: channel,
-          identity: identity,
-        );
-      }
+      final context =
+          await _tripContextService.joinOfflineChannelAsActiveTrip(channelCode);
+      final channel = context.activeChannel;
+      if (channel == null) throw StateError('Joined channel not found.');
       state = const OfflineChannelMutationState(
         successMessage: 'Offline channel joined and trip activated.',
       );
@@ -269,7 +254,6 @@ final offlineChannelControllerProvider = StateNotifierProvider<
   return OfflineChannelController(
     ref.read(offlineChannelRepositoryProvider),
     ref.read(localIdentityRepositoryProvider),
-    ref.read(tripSessionRepositoryProvider),
     ref.read(tripContextServiceProvider),
   );
 });

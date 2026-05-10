@@ -11,7 +11,9 @@ import '../../../core/settings/settings_service.dart';
 import '../../../shared/widgets/compact_status_chip.dart';
 import '../../groups/presentation/group_controller.dart';
 import '../../nearby/data/nearby_permission_service.dart';
+import '../../offline_channel/presentation/offline_channel_controller.dart';
 import '../../ptt/data/ptt_audio_service.dart';
+import '../../trip_context/data/trip_context_service.dart';
 import '../data/trip_session_repository.dart';
 import '../data/trip_session_service.dart';
 
@@ -170,7 +172,10 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
             const SizedBox(height: 16),
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 180),
-              child: _bodyForStep(),
+              child: KeyedSubtree(
+                key: ValueKey('trip-wizard-step-$_step-${_type.name}'),
+                child: _bodyForStep(),
+              ),
             ),
             if (_errorMessage != null) ...[
               const SizedBox(height: 12),
@@ -291,16 +296,17 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
             customChannelCode: _blankToNull(_customCodeController.text),
           );
         case TripWizardType.joinExisting:
-          await repo.joinExistingTrip(
-            tripCode: _joinCodeController.text,
-            identity: identity,
-            groupRepository: access ? ref.read(groupRepositoryProvider) : null,
-            tryCloud: access,
-          );
+          await ref
+              .read(tripContextServiceProvider)
+              .joinOfflineChannelAsActiveTrip(_joinCodeController.text);
       }
       final settings = ref.read(settingsServiceProvider);
       await settings.setBool('tutorial_seen', true);
       await settings.setBool('coach_marks_seen', true);
+      ref.invalidate(activeTripContextProvider);
+      ref.invalidate(activeOfflineChannelProvider);
+      ref.invalidate(activeUsableOfflineChannelProvider);
+      ref.invalidate(activeTripChannelProvider);
       ref.invalidate(activeTripProvider);
       if (!mounted) return;
       context.go('/home');

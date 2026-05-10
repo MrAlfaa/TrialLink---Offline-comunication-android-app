@@ -40,8 +40,10 @@ void main() {
       expect(source, contains('activeTripChannelProvider'));
       expect(source, contains('repairActiveChannelFromActiveTripIfNeeded'));
       expect(source, contains('activeTripContextProvider.future'));
-      expect(source, contains('TripSessionRepository'));
-      expect(source, contains('activateOfflineChannelTrip'));
+      expect(source, contains('TripContextService'));
+      expect(source, contains('joinOfflineChannelAsActiveTrip'));
+      expect(source, isNot(contains('TripSessionRepository')));
+      expect(source, isNot(contains('activateOfflineChannelTrip')));
     });
 
     test('offline feature screens use resolver-backed active channel provider',
@@ -84,6 +86,7 @@ void main() {
               .readAsStringSync();
 
       expect(repository, contains('activateOfflineChannelTrip'));
+      expect(joinScreen, contains('activeTripContextProvider'));
       expect(joinScreen, contains('activeTripProvider'));
       expect(joinScreen, contains('activeUsableOfflineChannelProvider'));
       expect(joinScreen, contains('activeTripChannelProvider'));

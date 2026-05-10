@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../trip_context/data/trip_context_service.dart';
 import '../../trip/data/trip_session_service.dart';
 import 'offline_channel_controller.dart';
 
@@ -39,6 +40,7 @@ class _JoinOfflineChannelScreenState
       ref.invalidate(activeOfflineChannelProvider);
       ref.invalidate(activeUsableOfflineChannelProvider);
       ref.invalidate(activeTripChannelProvider);
+      ref.invalidate(activeTripContextProvider);
       ref.invalidate(activeTripProvider);
       context.go('/offline-channel/${channel.channelId}');
     }

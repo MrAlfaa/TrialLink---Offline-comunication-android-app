@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/database/local_database.dart';
+import '../../../core/identity/local_identity_model.dart';
 import '../../../core/identity/local_identity_repository.dart';
 import '../../offline_channel/data/models/offline_channel_model.dart';
 import '../../offline_channel/data/offline_channel_repository.dart';
@@ -92,6 +93,7 @@ class TripContextService {
   Future<ActiveTripContext?> getActiveTripContext() async {
     await _normalizeActiveTrips();
     var trip = await _tripRepository.getActiveTrip();
+    trip = await _reconcileGloballyActiveChannel(trip) ?? trip;
     trip ??= await _repairOrphanActiveChannel();
     if (trip == null || trip.status != 'active') return null;
     await ensureDefaultChannelAndChat(trip.tripId);
@@ -176,6 +178,47 @@ class TripContextService {
     }
     final context = await getActiveTripContext();
     if (context == null) throw StateError('Active trip context not created.');
+    return context;
+  }
+
+  Future<ActiveTripContext> joinOfflineChannelAsActiveTrip(
+    String channelCode, {
+    String? tripName,
+  }) async {
+    final identity = await _requireIdentity();
+    final channel = await _channelRepository.joinChannelForIdentity(
+      identity: identity,
+      channelCode: channelCode,
+    );
+    await _activateOfflineChannelTripRecord(
+      channel: channel,
+      identity: identity,
+      tripName: tripName,
+    );
+    final context = await getActiveTripContext();
+    if (context == null ||
+        context.activeChannel?.channelId != channel.channelId) {
+      throw StateError('Joined channel was not activated.');
+    }
+    return context;
+  }
+
+  Future<ActiveTripContext> activateOfflineChannelAsTrip(
+    String channelId, {
+    String? tripName,
+  }) async {
+    final identity = await _requireIdentity();
+    final channel = await _channelById(channelId);
+    if (channel == null) throw StateError('Offline channel not found.');
+    await _activateOfflineChannelTripRecord(
+      channel: channel,
+      identity: identity,
+      tripName: tripName,
+    );
+    final context = await getActiveTripContext();
+    if (context == null || context.activeChannel?.channelId != channelId) {
+      throw StateError('Offline channel was not activated.');
+    }
     return context;
   }
 
@@ -274,59 +317,7 @@ class TripContextService {
   }
 
   Future<void> switchActiveChannel(String channelId) async {
-    final db = await _database.database;
-    final rows = await db.query(
-      'offline_channels',
-      where: 'channel_id = ?',
-      whereArgs: [channelId],
-      limit: 1,
-    );
-    if (rows.isEmpty) throw StateError('Offline channel not found.');
-    final channel = OfflineChannelModel.fromDb(rows.first);
-    final tripId =
-        channel.tripId ?? (await _tripRepository.getActiveTrip())?.tripId;
-    if (tripId == null || tripId.isEmpty) {
-      throw StateError('Create or activate a trip before switching channels.');
-    }
-    final now = DateTime.now().toIso8601String();
-    await db.transaction((txn) async {
-      await txn.update('offline_channels', {'is_active': 0});
-      await txn.update(
-        'offline_channels',
-        {
-          'trip_id': tripId,
-          'is_active': 1,
-          'channel_status': 'active',
-          'updated_at': now,
-          'last_opened_at': now,
-        },
-        where: 'channel_id = ?',
-        whereArgs: [channelId],
-      );
-      await txn.update(
-        'trip_sessions',
-        {
-          'active_channel_id': channelId,
-          'offline_channel_id': channelId,
-          'channel_code': channel.channelCode,
-          'channel_name': channel.channelName,
-          'updated_at': now,
-          'last_opened_at': now,
-        },
-        where: 'trip_id = ?',
-        whereArgs: [tripId],
-      );
-      await txn.update(
-        'chat_rooms',
-        {'is_active': 0, 'updated_at': now},
-        where: 'trip_id = ?',
-        whereArgs: [tripId],
-      );
-    });
-    await _database.upsertSetting('active_offline_channel_id', channelId);
-    await ensureDefaultChannelAndChat(tripId);
-    final chat = await _defaultChatForChannel(tripId, channelId);
-    if (chat != null) await switchActiveChat(chat.chatId);
+    await activateOfflineChannelAsTrip(channelId);
   }
 
   Future<void> switchActiveChat(String chatId) async {
@@ -428,11 +419,144 @@ class TripContextService {
     if (channel == null || !channel.isUsable) return null;
     final identity = await _identityRepository.getCurrentIdentity();
     if (identity == null) return null;
-    return _tripRepository.activateOfflineChannelTrip(
+    return _activateOfflineChannelTripRecord(
       channel: channel,
       identity: identity,
       tripName: channel.channelName,
     );
+  }
+
+  Future<TripSessionModel?> _reconcileGloballyActiveChannel(
+    TripSessionModel? trip,
+  ) async {
+    final channel = await _channelRepository.getActiveChannel();
+    if (channel == null || !channel.isUsable) return null;
+    final tripChannelId = trip?.activeChannelId ?? trip?.offlineChannelId;
+    if (trip != null && tripChannelId == channel.channelId) return null;
+    final identity = await _identityRepository.getCurrentIdentity();
+    if (identity == null) return null;
+    return _activateOfflineChannelTripRecord(
+      channel: channel,
+      identity: identity,
+      tripName: channel.channelName,
+    );
+  }
+
+  Future<TripSessionModel> _activateOfflineChannelTripRecord({
+    required OfflineChannelModel channel,
+    required LocalIdentityModel identity,
+    String? tripName,
+  }) async {
+    if (!channel.isUsable) {
+      throw StateError('Ended channels are read-only.');
+    }
+    final normalizedCode = _tripRepository.normalizeChannelCode(
+      channel.channelCode,
+    );
+    final db = await _database.database;
+    final existing = await _findTripForChannel(channel, normalizedCode);
+    if (existing == null) {
+      return _tripRepository.createTripFromOfflineChannel(
+        tripName: (tripName?.trim().isNotEmpty ?? false)
+            ? tripName!.trim()
+            : channel.channelName,
+        offlineChannelId: channel.channelId,
+        channelCode: normalizedCode,
+        channelName: channel.channelName,
+        localIdentityId: identity.localUserId,
+      );
+    }
+
+    final now = DateTime.now().toIso8601String();
+    await db.transaction((txn) async {
+      await txn.update(
+        'trip_sessions',
+        {'status': 'inactive', 'updated_at': now},
+        where: 'status = ?',
+        whereArgs: ['active'],
+      );
+      await txn.update(
+        'trip_sessions',
+        {
+          'status': 'active',
+          'mode': existing.mode == 'online' ? 'hybrid' : existing.mode,
+          'offline_channel_id': channel.channelId,
+          'active_channel_id': channel.channelId,
+          'channel_code': normalizedCode,
+          'channel_name': channel.channelName,
+          'last_opened_at': now,
+          'updated_at': now,
+        },
+        where: 'trip_id = ?',
+        whereArgs: [existing.tripId],
+      );
+      await txn.update('offline_channels', {'is_active': 0});
+      await txn.update(
+        'offline_channels',
+        {
+          'trip_id': existing.tripId,
+          'is_primary': 1,
+          'is_active': 1,
+          'channel_status': 'active',
+          'last_opened_at': now,
+          'updated_at': now,
+        },
+        where: 'channel_id = ?',
+        whereArgs: [channel.channelId],
+      );
+      await txn.update(
+        'chat_rooms',
+        {'is_active': 0, 'updated_at': now},
+      );
+    });
+    await _database.upsertSetting(
+        'active_offline_channel_id', channel.channelId);
+    await ensureDefaultChannelAndChat(existing.tripId);
+    final chat =
+        await _defaultChatForChannel(existing.tripId, channel.channelId);
+    if (chat != null) await switchActiveChat(chat.chatId);
+    return (await _tripById(existing.tripId)) ?? existing;
+  }
+
+  Future<TripSessionModel?> _findTripForChannel(
+    OfflineChannelModel channel,
+    String normalizedCode,
+  ) async {
+    final db = await _database.database;
+    if ((channel.tripId ?? '').isNotEmpty) {
+      final linked = await db.query(
+        'trip_sessions',
+        where: 'trip_id = ?',
+        whereArgs: [channel.tripId],
+        limit: 1,
+      );
+      if (linked.isNotEmpty) return TripSessionModel.fromDb(linked.first);
+    }
+    final rows = await db.query(
+      'trip_sessions',
+      where:
+          'mode IN (?, ?, ?) AND (offline_channel_id = ? OR active_channel_id = ? OR channel_code = ?)',
+      whereArgs: [
+        'offline',
+        'hybrid',
+        'online',
+        channel.channelId,
+        channel.channelId,
+        normalizedCode,
+      ],
+      orderBy: "CASE status WHEN 'active' THEN 0 ELSE 1 END, "
+          'COALESCE(last_opened_at, started_at, created_at) DESC',
+      limit: 1,
+    );
+    return rows.isEmpty ? null : TripSessionModel.fromDb(rows.first);
+  }
+
+  Future<LocalIdentityModel> _requireIdentity() async {
+    final identity = await _identityRepository.getCurrentIdentity();
+    if (identity == null) {
+      throw StateError('Create your TrailLink profile before using channels.');
+    }
+    return identity;
   }
 
   Future<TripSessionModel?> _tripById(String tripId) async {

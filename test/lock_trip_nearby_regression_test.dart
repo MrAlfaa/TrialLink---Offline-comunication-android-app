@@ -34,7 +34,7 @@ void main() {
     expect(dashboard, contains("context.go('/trip/setup-wizard')"));
     expect(router, contains("path: '/trip/create'"));
     expect(router, contains('TripSetupWizardScreen'));
-    expect(trip, contains('if (flow == TripSetupFlow.onboarding)'));
+    expect(trip, contains('if (widget.flow == TripSetupFlow.onboarding)'));
   });
 
   test('nearby stale endpoint failures are sanitized and reset peer state', () {

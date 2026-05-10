@@ -86,6 +86,10 @@ class OfflineChannelDetailsScreen extends ConsumerWidget {
                                   ..invalidate(offlineChannelListProvider)
                                   ..invalidate(activeOfflineChannelProvider)
                                   ..invalidate(
+                                      activeUsableOfflineChannelProvider)
+                                  ..invalidate(activeTripChannelProvider)
+                                  ..invalidate(activeTripContextProvider)
+                                  ..invalidate(
                                     offlineChannelDetailsProvider(channelId),
                                   );
                               },
@@ -97,6 +101,10 @@ class OfflineChannelDetailsScreen extends ConsumerWidget {
                                 ref
                                   ..invalidate(offlineChannelListProvider)
                                   ..invalidate(activeOfflineChannelProvider)
+                                  ..invalidate(
+                                      activeUsableOfflineChannelProvider)
+                                  ..invalidate(activeTripChannelProvider)
+                                  ..invalidate(activeTripContextProvider)
                                   ..invalidate(
                                     offlineChannelDetailsProvider(channelId),
                                   );
@@ -179,6 +187,9 @@ class OfflineChannelDetailsScreen extends ConsumerWidget {
     ref
       ..invalidate(offlineChannelListProvider)
       ..invalidate(activeOfflineChannelProvider)
+      ..invalidate(activeUsableOfflineChannelProvider)
+      ..invalidate(activeTripChannelProvider)
+      ..invalidate(activeTripContextProvider)
       ..invalidate(offlineChannelDetailsProvider(channelId));
   }
 
@@ -209,6 +220,9 @@ class OfflineChannelDetailsScreen extends ConsumerWidget {
     ref
       ..invalidate(offlineChannelListProvider)
       ..invalidate(activeOfflineChannelProvider)
+      ..invalidate(activeUsableOfflineChannelProvider)
+      ..invalidate(activeTripChannelProvider)
+      ..invalidate(activeTripContextProvider)
       ..invalidate(offlineChannelMembersProvider(channelId));
     if (context.mounted) context.go('/offline-channel');
   }
