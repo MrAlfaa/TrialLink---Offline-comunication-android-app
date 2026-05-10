@@ -12,6 +12,7 @@ import '../../../core/mode/mode_models.dart';
 import '../../../core/settings/settings_service.dart';
 import '../../auth/data/models/user_model.dart';
 import '../../connectivity_intelligence/data/connectivity_metrics_recorder.dart';
+import '../../nearby/data/models/nearby_peer_model.dart';
 import '../../nearby/data/nearby_repository.dart';
 import '../../offline_channel/data/models/offline_channel_model.dart';
 import '../../offline_chat/data/models/offline_packet_model.dart';
@@ -96,6 +97,7 @@ class PttRepository {
           settings: _settings,
           local: _local,
           audio: _liveAudio,
+          nearby: _nearby,
         );
     return service.evaluate(effectiveMode: effectiveMode, channel: channel);
   }
@@ -370,7 +372,7 @@ class PttRepository {
       payloadJson: packet.toJsonString(),
     );
     final hadConnectedPeers =
-        (await _local.connectedPeers(channel.channelCode)).isNotEmpty;
+        (await _connectedPeers(channel.channelCode)).isNotEmpty;
     final sent = await _sendOfflinePacket(packet, channel.channelCode);
     await _local.updateVoiceStatus(
       localVoiceId: note.localVoiceId,
@@ -411,13 +413,17 @@ class PttRepository {
 
     switch (packet.packetType) {
       case 'ptt_request':
-        final message =
-            await _floorController.handleIncomingRequest(packet: packet);
+        final message = await _floorController.handleIncomingRequest(
+          packet: packet,
+          contextIdOverride: activeChannel.channelId,
+        );
         await _markProcessed(packet, 'accepted');
         return message;
       case 'ptt_release':
-        final message =
-            await _floorController.handleIncomingRelease(packet: packet);
+        final message = await _floorController.handleIncomingRelease(
+          packet: packet,
+          contextIdOverride: activeChannel.channelId,
+        );
         await _markProcessed(packet, 'accepted');
         return message;
       case 'voice_note':
@@ -425,7 +431,7 @@ class PttRepository {
         await _markProcessed(packet, 'accepted');
         return 'Voice note received.';
       case 'live_audio_start':
-        await _handleLiveStart(packet, currentUser);
+        await _handleLiveStart(packet, activeChannel, currentUser);
         await _markProcessed(packet, 'accepted');
         return '${packet.senderName} is live.';
       case 'live_audio_chunk':
@@ -433,7 +439,7 @@ class PttRepository {
         await _markProcessed(packet, 'accepted');
         return 'Live audio received.';
       case 'live_audio_end':
-        await _handleLiveEnd(packet, currentUser);
+        await _handleLiveEnd(packet, activeChannel, currentUser);
         await _markProcessed(packet, 'accepted');
         return 'Live Radio ended.';
       case 'voice_ack':
@@ -538,6 +544,7 @@ class PttRepository {
 
   Future<void> _handleLiveStart(
     OfflinePacketModel packet,
+    OfflineChannelModel activeChannel,
     UserModel currentUser,
   ) async {
     if (_isMine(packet, currentUser)) return;
@@ -548,15 +555,15 @@ class PttRepository {
             packet.createdAt;
     await _floorController.setRemoteSpeaker(
       contextType: 'offline_channel',
-      contextId: packet.channelId,
+      contextId: activeChannel.channelId,
       speakerId: packet.senderLocalId ?? packet.senderId,
       speakerName: packet.senderName,
     );
     await _local.upsertLiveRadioSession(
       LiveRadioSessionModel(
         streamId: streamId,
-        offlineChannelId: packet.channelId,
-        channelCode: packet.channelCode,
+        offlineChannelId: activeChannel.channelId,
+        channelCode: activeChannel.channelCode,
         senderLocalId: packet.senderLocalId ?? packet.senderId,
         senderName: packet.senderName,
         startedAt: startedAt,
@@ -607,6 +614,7 @@ class PttRepository {
 
   Future<void> _handleLiveEnd(
     OfflinePacketModel packet,
+    OfflineChannelModel activeChannel,
     UserModel currentUser,
   ) async {
     if (_isMine(packet, currentUser)) return;
@@ -618,7 +626,7 @@ class PttRepository {
     await _liveAudio.endIncomingStream(streamId);
     await _floorController.release(
       contextType: 'offline_channel',
-      contextId: packet.channelId,
+      contextId: activeChannel.channelId,
       speakerId: packet.senderLocalId ?? packet.senderId,
       speakerName: packet.senderName,
     );
@@ -675,7 +683,7 @@ class PttRepository {
   ) async {
     final nearby = _nearby;
     if (nearby == null) return false;
-    final peers = await _local.connectedPeers(channelCode);
+    final peers = await _connectedPeers(channelCode);
     if (peers.isEmpty) return false;
     var sent = false;
     for (final peer in peers) {
@@ -716,6 +724,12 @@ class PttRepository {
       await _local.markQueueStatus(packet.packetId, 'sent');
     }
     return sent;
+  }
+
+  Future<List<NearbyPeerModel>> _connectedPeers(String channelCode) async {
+    final nearby = _nearby;
+    if (nearby == null) return _local.connectedPeers(channelCode);
+    return nearby.connectedPeers(channelCode);
   }
 
   Future<void> _markProcessed(OfflinePacketModel packet, String action) {

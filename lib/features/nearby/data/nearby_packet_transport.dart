@@ -25,6 +25,10 @@ abstract class NearbyPacketTransport {
     required String packetJson,
   });
 
+  bool isConnected(String endpointId);
+
+  List<NearbyPeerModel> connectedPeersForChannel(String channelCode);
+
   Stream<NearbyPeerModel> get peerDiscoveredStream;
 
   Stream<String> get peerLostStream;

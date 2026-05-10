@@ -153,7 +153,7 @@ class EmergencyRepository {
         event: event,
         payloadJson: packet.toJsonString(),
       );
-      final peers = await _local.connectedPeers(channel.channelCode);
+      final peers = await _nearby.connectedPeers(channel.channelCode);
       for (final peer in peers) {
         await _nearby.sendPacket(
           endpointId: peer.endpointId,
@@ -227,7 +227,7 @@ class EmergencyRepository {
         );
         final List<NearbyPeerModel> peers = _nearby == null
             ? <NearbyPeerModel>[]
-            : await _local.connectedPeers(activeChannel.channelCode);
+            : await _nearby.connectedPeers(activeChannel.channelCode);
         final matchingPeer =
             peers.where((peer) => peer.userId == packet.senderId);
         await _metricsRecorder.recordAck(
@@ -305,7 +305,7 @@ class EmergencyRepository {
       receivedPacket: receivedPacket,
       user: currentUser,
     );
-    final peers = await _local.connectedPeers(activeChannel.channelCode);
+    final peers = await _nearby.connectedPeers(activeChannel.channelCode);
     for (final peer in peers) {
       await _nearby.sendPacket(
         endpointId: peer.endpointId,

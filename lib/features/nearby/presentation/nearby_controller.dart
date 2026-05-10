@@ -52,7 +52,12 @@ final nearbyTransportProvider = Provider<NearbyPacketTransport>((ref) {
 });
 
 final nearbyRepositoryProvider = Provider<NearbyRepository>((ref) {
-  return NearbyRepository(transport: ref.watch(nearbyTransportProvider));
+  final repository =
+      NearbyRepository(transport: ref.watch(nearbyTransportProvider));
+  ref.onDispose(() {
+    unawaited(repository.dispose());
+  });
+  return repository;
 });
 
 class NearbyState {
@@ -314,7 +319,7 @@ class NearbyController extends StateNotifier<NearbyState> {
           packetJson: packet.toJsonString(),
         );
       } catch (_) {
-        // Packet send failures are already visible through quality scoring from normal traffic.
+        await _onPeerLost(peer.endpointId);
       }
     }
   }

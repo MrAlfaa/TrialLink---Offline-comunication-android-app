@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../../core/identity/current_user_actor.dart';
 import '../../connectivity_intelligence/data/connectivity_metrics_recorder.dart';
 import '../../nearby/data/models/nearby_peer_model.dart';
@@ -34,7 +36,7 @@ class OfflineChatRepository {
   }
 
   Future<List<NearbyPeerModel>> connectedPeers(String channelCode) {
-    return _local.getConnectedPeers(channelCode);
+    return _nearby.connectedPeers(channelCode);
   }
 
   Future<OfflineTextMessageModel> createOutgoing({
@@ -110,11 +112,32 @@ class OfflineChatRepository {
     );
   }
 
+  Future<void> markAckTimeoutIfStillWaiting(String messageId) async {
+    final message = await _local.getMessage(messageId);
+    if (message == null || message.ackStatus == 'acknowledged') {
+      _debugOfflineChat(
+        'ack_timeout_skip',
+        messageId: messageId,
+        reason: message == null ? 'missing-message' : 'already-acknowledged',
+      );
+      return;
+    }
+    _debugOfflineChat('ack_timeout_mark', messageId: messageId);
+    await markAckTimeout(messageId);
+  }
+
   Future<void> _sendPacketToPeers(
     OfflinePacketModel packet,
     List<NearbyPeerModel> peers,
   ) async {
     var sent = false;
+    if (peers.isEmpty && packet.packetType == 'ack') {
+      _debugOfflineChat(
+        'ack_tx_no_peers',
+        packetId: packet.packetId,
+        messageId: packet.ackForMessageId,
+      );
+    }
     for (final peer in peers) {
       try {
         await _nearby.sendPacket(
@@ -299,12 +322,22 @@ class OfflineChatRepository {
     );
     final messageId = packet.ackForMessageId;
     if (messageId != null && messageId.isNotEmpty) {
+      _debugOfflineChat(
+        'ack_rx',
+        packetId: packet.packetId,
+        messageId: messageId,
+      );
       await _local.updateMessageStatus(
         messageId: messageId,
         deliveryStatus: 'delivered',
         ackStatus: 'acknowledged',
       );
     } else if ((packet.ackForPacketId ?? '').isNotEmpty) {
+      _debugOfflineChat(
+        'ack_rx',
+        packetId: packet.packetId,
+        reason: 'by-packet-id',
+      );
       await _local.updateMessageStatusByPacket(
         packetId: packet.ackForPacketId!,
         deliveryStatus: 'delivered',
@@ -312,6 +345,21 @@ class OfflineChatRepository {
       );
     }
   }
+}
+
+void _debugOfflineChat(
+  String event, {
+  String? packetId,
+  String? messageId,
+  String? reason,
+}) {
+  if (!kDebugMode) return;
+  debugPrint(
+    '[TrailLink][OfflineChat] event=$event '
+    'packet=${packetId ?? '-'} '
+    'message=${messageId ?? '-'} '
+    'reason=${reason ?? '-'}',
+  );
 }
 
 class OfflinePacketHandleResult {

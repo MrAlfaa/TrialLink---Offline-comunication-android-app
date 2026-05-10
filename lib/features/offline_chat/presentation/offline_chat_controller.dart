@@ -168,9 +168,7 @@ class OfflineChatController extends StateNotifier<OfflineChatState> {
   void _scheduleAckTimeout(String messageId) {
     _ackTimers[messageId]?.cancel();
     _ackTimers[messageId] = Timer(const Duration(seconds: 15), () async {
-      final current = state.messages.where((m) => m.messageId == messageId);
-      if (current.isEmpty || current.first.ackStatus == 'acknowledged') return;
-      await _repository.markAckTimeout(messageId);
+      await _repository.markAckTimeoutIfStillWaiting(messageId);
       await refresh();
     });
   }

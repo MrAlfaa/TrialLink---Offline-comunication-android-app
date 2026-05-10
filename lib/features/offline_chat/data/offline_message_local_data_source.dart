@@ -44,6 +44,17 @@ class OfflineMessageLocalDataSource {
     return rows.isNotEmpty;
   }
 
+  Future<OfflineTextMessageModel?> getMessage(String messageId) async {
+    final db = await _database.database;
+    final rows = await db.query(
+      'offline_messages',
+      where: 'message_id = ?',
+      whereArgs: [messageId],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : OfflineTextMessageModel.fromDb(rows.first);
+  }
+
   Future<void> updateMessageStatus({
     required String messageId,
     required String deliveryStatus,

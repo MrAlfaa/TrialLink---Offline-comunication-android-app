@@ -8,6 +8,7 @@ import '../../../core/settings/settings_service.dart';
 import '../../auth/data/models/user_model.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../nearby/presentation/nearby_controller.dart';
+import '../../offline_channel/data/models/offline_channel_model.dart';
 import '../../offline_channel/data/offline_channel_repository.dart';
 import '../../offline_channel/presentation/offline_channel_controller.dart';
 import '../data/location_repository.dart';
@@ -174,18 +175,16 @@ class LocationController extends StateNotifier<LocationState> {
     }
     state = state.copyWith(isSharing: true, clearMessages: true);
     try {
-      final channel = args.offlineChannelId == null
-          ? null
-          : await _channelRepository.getChannel(args.offlineChannelId!);
+      final resolvedChannel = await _resolveOfflineChannelForShare();
       final location = await _repository.shareLocation(
         user: user,
         groupId: args.groupId,
-        channel: channel,
+        channel: resolvedChannel,
         online: _mode == AppConnectionMode.online,
       );
       final teammates = await _repository.loadTeammates(
         groupId: args.groupId,
-        offlineChannelId: args.offlineChannelId,
+        offlineChannelId: args.offlineChannelId ?? resolvedChannel?.channelId,
       );
       if (!mounted) return;
       state = state.copyWith(
@@ -202,6 +201,16 @@ class LocationController extends StateNotifier<LocationState> {
 
   void onModeChanged(AppConnectionMode mode) {
     _mode = mode;
+  }
+
+  Future<OfflineChannelModel?> _resolveOfflineChannelForShare() async {
+    if (args.offlineChannelId != null) {
+      return _channelRepository.getChannel(args.offlineChannelId!);
+    }
+    if (args.groupId != null && _mode == AppConnectionMode.online) {
+      return null;
+    }
+    return await _channelRepository.getActiveChannel();
   }
 }
 

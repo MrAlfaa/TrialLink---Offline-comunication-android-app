@@ -139,6 +139,23 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
   }
 
   @override
+  bool isConnected(String endpointId) {
+    return _peers[endpointId]?.status == PeerConnectionStatus.connected;
+  }
+
+  @override
+  List<NearbyPeerModel> connectedPeersForChannel(String channelCode) {
+    return _peers.values
+        .where(
+          (peer) =>
+              peer.activeChannelCode == channelCode &&
+              peer.isSameChannel &&
+              peer.status == PeerConnectionStatus.connected,
+        )
+        .toList(growable: false);
+  }
+
+  @override
   Future<void> sendPacket({
     required String endpointId,
     required String packetJson,

@@ -92,7 +92,7 @@ class _PttBody extends ConsumerWidget {
     final modeState = ref.watch(modeControllerProvider);
     ref.listen(offlinePacketRouterProvider, (_, next) {
       final notice = next.lastNotice ?? '';
-      if (notice.contains('live') || notice.contains('Live Radio')) {
+      if (shouldRefreshPttForOfflineNotice(notice)) {
         controller.refresh();
       }
       if (next.lastEmergencyAlert != null) {
