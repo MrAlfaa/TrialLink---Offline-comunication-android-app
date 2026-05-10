@@ -22,6 +22,10 @@ class LiveAudioChunk {
 }
 
 typedef LiveAudioChunkHandler = Future<void> Function(LiveAudioChunk chunk);
+typedef LiveAudioChunkErrorHandler = void Function(
+  Object error,
+  StackTrace stackTrace,
+);
 
 class LiveRadioAudioService {
   LiveRadioAudioService({
@@ -53,6 +57,7 @@ class LiveRadioAudioService {
   Future<void> startOutgoingStream({
     required String streamId,
     required LiveAudioChunkHandler onChunk,
+    LiveAudioChunkErrorHandler? onChunkError,
   }) async {
     if (_recording) {
       throw StateError('Live Radio is already streaming.');
@@ -87,7 +92,9 @@ class LiveRadioAudioService {
               bytes: chunk,
               createdAt: DateTime.now(),
             ),
-          ),
+          ).catchError((Object error, StackTrace stackTrace) {
+            onChunkError?.call(error, stackTrace);
+          }),
         );
       }
     });

@@ -341,6 +341,7 @@ class _TripSetupScreenState extends ConsumerState<TripSetupScreen> {
     if (widget.flow == TripSetupFlow.onboarding) {
       await ref.read(setupProgressServiceProvider).markTripConfigured();
     }
+    await ref.read(authAccessControllerProvider.notifier).refreshFromIdentity();
     ref.invalidate(activeTripContextProvider);
     ref.invalidate(activeOfflineChannelProvider);
     ref.invalidate(activeUsableOfflineChannelProvider);

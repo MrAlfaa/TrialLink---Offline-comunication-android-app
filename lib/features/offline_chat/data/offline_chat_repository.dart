@@ -223,8 +223,8 @@ class OfflineChatRepository {
         OfflineTextMessageModel(
           messageId: packet.messageId!,
           packetId: packet.packetId,
-          channelId: packet.channelId,
-          channelCode: packet.channelCode,
+          channelId: activeChannel.channelId,
+          channelCode: activeChannel.channelCode,
           chatId: packet.chatId,
           senderId: packet.senderId,
           senderName: packet.senderName,

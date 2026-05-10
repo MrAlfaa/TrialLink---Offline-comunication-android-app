@@ -138,7 +138,8 @@ class PttController extends StateNotifier<PttState> {
       ..add(_socketService.pttDeniedStream.listen(_onPttDenied))
       ..add(_socketService.pttSpeakerChangedStream.listen(_onSpeakerChanged))
       ..add(_socketService.pttSpeakerReleasedStream.listen(_onSpeakerReleased))
-      ..add(_socketService.voiceNoteStream.listen(_onVoiceNoteReceived));
+      ..add(_socketService.voiceNoteStream.listen(_onVoiceNoteReceived))
+      ..add(_repository.liveRadioFailureStream.listen(_onLiveRadioFailure));
 
     if (args.isOnlineGroup && _mode == AppConnectionMode.online) {
       await _socketService.connect();
@@ -466,6 +467,17 @@ class PttController extends StateNotifier<PttState> {
     await _repository.upsertRemoteVoiceNote(
       data,
       currentUserId: args.currentUser.id,
+    );
+    await refresh();
+  }
+
+  Future<void> _onLiveRadioFailure(String message) async {
+    _recordingTimer?.cancel();
+    state = state.copyWith(
+      isLiveStreaming: false,
+      isWaitingForFloor: false,
+      voiceMode: PttVoiceMode.voiceNote,
+      errorMessage: message,
     );
     await refresh();
   }

@@ -303,6 +303,9 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
       final settings = ref.read(settingsServiceProvider);
       await settings.setBool('tutorial_seen', true);
       await settings.setBool('coach_marks_seen', true);
+      await ref
+          .read(authAccessControllerProvider.notifier)
+          .refreshFromIdentity();
       ref.invalidate(activeTripContextProvider);
       ref.invalidate(activeOfflineChannelProvider);
       ref.invalidate(activeUsableOfflineChannelProvider);

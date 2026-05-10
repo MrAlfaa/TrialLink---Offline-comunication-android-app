@@ -22,6 +22,19 @@ class NearbyAdvertisementPayload {
   final DateTime timestamp;
 
   factory NearbyAdvertisementPayload.fromEndpointName(String value) {
+    if (value.startsWith('TL2|')) {
+      final parts = value.split('|');
+      if (parts.length < 6) throw const FormatException('Invalid payload');
+      return NearbyAdvertisementPayload(
+        protocolVersion: '2.0',
+        userId: parts[2],
+        displayName: utf8.decode(base64Url.decode(_pad(parts[3]))),
+        activeChannelId: parts[4],
+        activeChannelCode: parts[1],
+        deviceName: utf8.decode(base64Url.decode(_pad(parts[5]))),
+        timestamp: DateTime.now(),
+      );
+    }
     if (value.startsWith('TL1|')) {
       final parts = value.split('|');
       if (parts.length < 6) throw const FormatException('Invalid payload');
@@ -49,18 +62,21 @@ class NearbyAdvertisementPayload {
   }
 
   String toEndpointName() {
-    final shortName = _compact(displayName, 18);
-    final shortDevice = _compact(deviceName, 16);
+    final shortName = _compact(displayName, 12);
+    final shortDevice = _compact(deviceName, 10);
     final encodedName =
         base64Url.encode(utf8.encode(shortName)).replaceAll('=', '');
     final encodedDevice =
         base64Url.encode(utf8.encode(shortDevice)).replaceAll('=', '');
-    return 'TL1|$activeChannelCode|$userId|$encodedName|$activeChannelId|$encodedDevice';
+    final shortUserId = _compactId(userId);
+    final shortChannelId = _compactId(activeChannelId);
+    return 'TL2|$activeChannelCode|$shortUserId|$encodedName|$shortChannelId|$encodedDevice';
   }
 
   bool isCompatibleWith(String channelCode) {
     return appId == 'TrailLink' &&
-        protocolVersion.startsWith('1.') &&
+        (protocolVersion.startsWith('1.') ||
+            protocolVersion.startsWith('2.')) &&
         activeChannelCode == channelCode;
   }
 
@@ -68,6 +84,13 @@ class NearbyAdvertisementPayload {
     final trimmed = value.trim();
     if (trimmed.length <= maxLength) return trimmed;
     return trimmed.substring(0, maxLength);
+  }
+
+  static String _compactId(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return 'local';
+    final firstSegment = trimmed.split('-').first;
+    return _compact(firstSegment, 8);
   }
 
   static String _pad(String value) {

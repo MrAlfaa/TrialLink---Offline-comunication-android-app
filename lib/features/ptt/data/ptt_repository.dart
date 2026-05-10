@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -50,6 +51,7 @@ class PttRepository {
         _uuid = uuid ?? const Uuid();
 
   static const offlineMaxFileBytes = 250 * 1024;
+  static const liveAudioMaxPacketBytes = 64 * 1024;
 
   final PttApi _api;
   final PttLocalDataSource _local;
@@ -63,11 +65,15 @@ class PttRepository {
   final LiveRadioEligibilityService? _liveRadioEligibility;
   final Uuid _uuid;
   final Map<String, int> _incomingLiveChunkCounts = {};
+  final _liveRadioFailureController = StreamController<String>.broadcast();
   String? _activeLiveStreamId;
   DateTime? _activeLiveStartedAt;
   int _activeLiveChunkCount = 0;
+  bool _handlingLiveFailure = false;
 
   PttFloorController get floorController => _floorController;
+  Stream<String> get liveRadioFailureStream =>
+      _liveRadioFailureController.stream;
 
   Future<void> configureFloorTimeout() async {
     _floorController.configureTimeoutSeconds(
@@ -172,7 +178,7 @@ class PttRepository {
       ),
     );
     try {
-      await _sendOfflinePacket(
+      final liveStartSent = await _sendOfflinePacket(
         _packetService.createLiveStartPacket(
           channel: channel,
           user: user,
@@ -182,6 +188,11 @@ class PttRepository {
         ),
         channel.channelCode,
       );
+      if (!liveStartSent) {
+        throw StateError(
+          'Live Radio could not reach connected peers. Use voice-note PTT.',
+        );
+      }
       await _liveAudio.startOutgoingStream(
         streamId: streamId,
         onChunk: (chunk) async {
@@ -195,7 +206,28 @@ class PttRepository {
             bytes: chunk.bytes,
             createdAt: chunk.createdAt,
           );
-          await _sendOfflinePacket(packet, channel.channelCode);
+          final packetBytes = packet.toJsonString().length;
+          if (packetBytes > liveAudioMaxPacketBytes) {
+            throw StateError(
+              'Live Radio audio packet is too large. Use voice-note PTT.',
+            );
+          }
+          final sent = await _sendOfflinePacket(packet, channel.channelCode);
+          if (!sent) {
+            throw StateError(
+              'Live Radio packet delivery failed. Use voice-note PTT.',
+            );
+          }
+        },
+        onChunkError: (error, _) {
+          unawaited(
+            _failActiveLiveRadio(
+              channel: channel,
+              user: user,
+              actor: actor,
+              error: error,
+            ),
+          );
         },
       );
       return streamId;
@@ -337,12 +369,27 @@ class PttRepository {
       channelCode: channel.channelCode,
       payloadJson: packet.toJsonString(),
     );
+    final hadConnectedPeers =
+        (await _local.connectedPeers(channel.channelCode)).isNotEmpty;
     final sent = await _sendOfflinePacket(packet, channel.channelCode);
     await _local.updateVoiceStatus(
       localVoiceId: note.localVoiceId,
-      deliveryStatus: sent ? 'sent' : 'pending',
-      ackStatus: 'waiting',
+      deliveryStatus: sent
+          ? 'sent'
+          : hadConnectedPeers
+              ? 'failed'
+              : 'pending',
+      ackStatus: sent
+          ? 'waiting'
+          : hadConnectedPeers
+              ? 'timeout'
+              : 'waiting',
     );
+    if (!sent && hadConnectedPeers) {
+      throw StateError(
+        'Voice note could not reach connected peers. Try again or move closer.',
+      );
+    }
   }
 
   Future<String> handleIncomingPacket({
@@ -434,6 +481,7 @@ class PttRepository {
   Future<void> dispose() async {
     await _liveAudio.dispose();
     await _audio.dispose();
+    await _liveRadioFailureController.close();
   }
 
   Future<void> stopAllAudio() async {
@@ -533,6 +581,14 @@ class PttRepository {
     final sequence =
         int.tryParse(packet.payload['sequence']?.toString() ?? '') ?? 0;
     final bytes = Uint8List.fromList(base64Decode(encoded));
+    if (bytes.length > liveAudioMaxPacketBytes) {
+      await _local.updateLiveRadioSession(
+        streamId: streamId,
+        status: 'failed',
+        lastError: 'Received Live Radio chunk was too large.',
+      );
+      return;
+    }
     _incomingLiveChunkCounts[streamId] =
         (_incomingLiveChunkCounts[streamId] ?? 0) + 1;
     await _liveAudio.addIncomingChunk(
@@ -577,6 +633,40 @@ class PttRepository {
   bool _isMine(OfflinePacketModel packet, UserModel currentUser) {
     return packet.senderId == currentUser.id ||
         packet.senderLocalId == currentUser.id;
+  }
+
+  Future<void> _failActiveLiveRadio({
+    required OfflineChannelModel channel,
+    required UserModel user,
+    CurrentUserActor? actor,
+    required Object error,
+  }) async {
+    if (_handlingLiveFailure) return;
+    final streamId = _activeLiveStreamId;
+    if (streamId == null) return;
+    _handlingLiveFailure = true;
+    _activeLiveStreamId = null;
+    _activeLiveStartedAt = null;
+    _activeLiveChunkCount = 0;
+    try {
+      await _liveAudio.stopOutgoingStream();
+      await _local.updateLiveRadioSession(
+        streamId: streamId,
+        endedAt: DateTime.now(),
+        status: 'failed',
+        lastError: '$error',
+      );
+      _liveRadioFailureController.add(
+        'Live Radio stopped. Use voice-note PTT. $error',
+      );
+      try {
+        await releaseOfflineFloor(channel: channel, user: user, actor: actor);
+      } catch (_) {
+        // The local live state is already failed; release propagation is best-effort.
+      }
+    } finally {
+      _handlingLiveFailure = false;
+    }
   }
 
   Future<bool> _sendOfflinePacket(

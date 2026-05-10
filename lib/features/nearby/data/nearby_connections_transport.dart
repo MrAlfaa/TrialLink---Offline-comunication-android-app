@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:nearby_connections/nearby_connections.dart';
 
 import 'models/nearby_advertisement_payload.dart';
@@ -143,9 +143,22 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
     required String endpointId,
     required String packetJson,
   }) async {
+    final bytes = Uint8List.fromList(utf8.encode(packetJson));
+    _debugNearbyPacket(
+      'tx_start',
+      endpointId: endpointId,
+      packetJson: packetJson,
+      byteLength: bytes.length,
+    );
     await _nearby.sendBytesPayload(
       endpointId,
-      Uint8List.fromList(utf8.encode(packetJson)),
+      bytes,
+    );
+    _debugNearbyPacket(
+      'tx_enqueued',
+      endpointId: endpointId,
+      packetJson: packetJson,
+      byteLength: bytes.length,
     );
   }
 
@@ -163,7 +176,29 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
       endpointId,
       onPayLoadRecieved: (id, payload) {
         if (payload.type != PayloadType.BYTES || payload.bytes == null) return;
-        _packetController.add(utf8.decode(payload.bytes!));
+        try {
+          final packetJson = utf8.decode(payload.bytes!);
+          _debugNearbyPacket(
+            'rx_bytes',
+            endpointId: id,
+            packetJson: packetJson,
+            byteLength: payload.bytes!.length,
+          );
+          _packetController.add(packetJson);
+        } catch (error) {
+          _debugNearbyPacket(
+            'rx_invalid_utf8',
+            endpointId: id,
+            byteLength: payload.bytes!.length,
+            reason: error.toString(),
+          );
+        }
+      },
+      onPayloadTransferUpdate: (id, update) {
+        _debugPayloadTransfer(
+          endpointId: id,
+          update: update,
+        );
       },
     );
   }
@@ -256,5 +291,51 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
     await _lostController.close();
     await _connectionController.close();
     await _packetController.close();
+  }
+}
+
+void _debugNearbyPacket(
+  String event, {
+  required String endpointId,
+  String? packetJson,
+  int? byteLength,
+  String? reason,
+}) {
+  if (!kDebugMode) return;
+  final decoded = _packetSummary(packetJson);
+  debugPrint(
+    '[TrailLink][NearbyPacket] event=$event '
+    'endpoint=$endpointId '
+    'type=${decoded['packetType'] ?? 'unknown'} '
+    'packet=${decoded['packetId'] ?? 'unknown'} '
+    'channel=${decoded['channelCode'] ?? 'unknown'} '
+    'bytes=${byteLength ?? 0} '
+    'reason=${reason ?? '-'}',
+  );
+}
+
+void _debugPayloadTransfer({
+  required String endpointId,
+  required PayloadTransferUpdate update,
+}) {
+  if (!kDebugMode) return;
+  debugPrint(
+    '[TrailLink][NearbyPayload] endpoint=$endpointId '
+    'payload=${update.id} status=${update.status.name} '
+    'bytes=${update.bytesTransferred}/${update.totalBytes}',
+  );
+}
+
+Map<String, Object?> _packetSummary(String? packetJson) {
+  if (packetJson == null || packetJson.isEmpty) return const {};
+  try {
+    final data = jsonDecode(packetJson) as Map<String, dynamic>;
+    return {
+      'packetId': data['packetId']?.toString(),
+      'packetType': data['packetType']?.toString(),
+      'channelCode': data['channelCode']?.toString(),
+    };
+  } catch (_) {
+    return const {};
   }
 }

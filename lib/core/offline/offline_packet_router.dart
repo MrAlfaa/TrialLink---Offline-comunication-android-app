@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/auth/data/models/user_model.dart';
@@ -17,6 +18,7 @@ import '../../features/offline_chat/data/offline_chat_repository.dart';
 import '../../features/ptt/data/ptt_repository.dart';
 import '../identity/auth_access_controller.dart';
 import '../identity/current_user_actor.dart';
+import '../identity/local_identity_repository.dart';
 
 class OfflinePacketRouterState {
   const OfflinePacketRouterState({
@@ -107,6 +109,10 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
 
   void setCurrentActor(CurrentUserActor? actor) {
     _currentActor = actor;
+    _debugRouter(
+      'actor_update',
+      reason: actor == null ? 'no-current-actor' : actor.identityType,
+    );
   }
 
   void clearEmergencyNotice() {
@@ -132,12 +138,28 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
 
   Future<void> _handlePacket(String packetJson) async {
     final actor = _currentActor;
-    if (actor == null) return;
+    if (actor == null) {
+      _debugRouter(
+        'drop',
+        packetJson: packetJson,
+        reason: 'no-current-actor',
+      );
+      state = state.copyWith(
+        lastNotice: 'Offline packet ignored. No local identity.',
+      );
+      return;
+    }
 
     OfflinePacketModel packet;
     try {
       packet = OfflinePacketModel.fromJsonString(packetJson);
-    } catch (_) {
+      _debugRouter('rx', packet: packet, bytes: packetJson.length);
+    } catch (error) {
+      _debugRouter(
+        'drop',
+        packetJson: packetJson,
+        reason: 'invalid-json: $error',
+      );
       state = state.copyWith(lastNotice: 'Invalid offline packet ignored.');
       return;
     }
@@ -153,6 +175,12 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
 
     final activeChannel = await _channelRepository.getActiveChannel();
     if (activeChannel == null) {
+      _debugRouter(
+        'drop',
+        packet: packet,
+        bytes: packetJson.length,
+        reason: 'no-active-channel',
+      );
       state = state.copyWith(
           lastNotice: 'Offline packet ignored. No active channel.');
       return;
@@ -245,6 +273,12 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
     }
 
     state = state.copyWith(lastNotice: result);
+    _debugRouter(
+      'handled',
+      packet: packet,
+      bytes: packetJson.length,
+      reason: result,
+    );
   }
 
   Future<void> _tryBridge(OfflinePacketModel packet) async {
@@ -280,10 +314,14 @@ final offlinePacketRouterProvider =
 
   ref.listen(authControllerProvider, (_, next) {
     router.setCurrentUser(next.user);
+    unawaited(_refreshRouterActorFromStorage(ref, router));
   });
   ref.listen(authAccessControllerProvider, (_, __) {
     router.setCurrentActor(_currentRouterActor(ref));
+    unawaited(_refreshRouterActorFromStorage(ref, router));
   });
+
+  unawaited(_refreshRouterActorFromStorage(ref, router));
 
   return router;
 });
@@ -296,5 +334,53 @@ CurrentUserActor? _currentRouterActor(Ref ref) {
   } catch (_) {
     final user = ref.read(authControllerProvider).user;
     return user == null ? null : CurrentUserActor.fromUserModel(user);
+  }
+}
+
+Future<void> _refreshRouterActorFromStorage(
+  Ref ref,
+  OfflinePacketRouter router,
+) async {
+  try {
+    final syncActor = _currentRouterActor(ref);
+    if (syncActor != null) {
+      router.setCurrentActor(syncActor);
+      return;
+    }
+    final identity =
+        await ref.read(localIdentityRepositoryProvider).getCurrentIdentity();
+    router.setCurrentActor(
+      identity == null ? null : CurrentUserActor.fromLocalIdentity(identity),
+    );
+  } catch (error) {
+    _debugRouter('actor_update_failed', reason: error.toString());
+  }
+}
+
+void _debugRouter(
+  String event, {
+  OfflinePacketModel? packet,
+  String? packetJson,
+  int? bytes,
+  String? reason,
+}) {
+  if (!kDebugMode) return;
+  final summary = packet ?? _tryParsePacket(packetJson);
+  debugPrint(
+    '[TrailLink][OfflinePacketRouter] event=$event '
+    'type=${summary?.packetType ?? 'unknown'} '
+    'packet=${summary?.packetId ?? 'unknown'} '
+    'channel=${summary?.channelCode ?? 'unknown'} '
+    'bytes=${bytes ?? packetJson?.length ?? 0} '
+    'reason=${reason ?? '-'}',
+  );
+}
+
+OfflinePacketModel? _tryParsePacket(String? packetJson) {
+  if (packetJson == null || packetJson.isEmpty) return null;
+  try {
+    return OfflinePacketModel.fromJsonString(packetJson);
+  } catch (_) {
+    return null;
   }
 }
