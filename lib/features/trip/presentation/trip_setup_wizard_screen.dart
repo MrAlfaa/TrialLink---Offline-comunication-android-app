@@ -75,6 +75,7 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
     final identity =
         await ref.read(localIdentityRepositoryProvider).getCurrentIdentity();
     final settings = ref.read(settingsServiceProvider);
+    final nearbyPermission = await NearbyPermissionService().check();
     final locationPermission = await Geolocator.checkPermission();
     final micReady = await PttAudioService().hasPermission();
     final sosEnabled = await settings.getBool('enable_offline_sos', true);
@@ -113,9 +114,9 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
         ),
         _ReadinessItem(
           label: 'Nearby permission',
-          state: _ReadinessState.missing,
-          actionLabel: 'Grant Permission',
-          onFix: _grantNearbyPermission,
+          state: _nearbyReadinessState(nearbyPermission),
+          actionLabel: nearbyPermission.granted ? null : 'Grant Permission',
+          onFix: nearbyPermission.granted ? null : _grantNearbyPermission,
         ),
         _ReadinessItem(
           label: 'Location permission',
@@ -757,11 +758,21 @@ class _ReadinessItem {
 enum _ReadinessState {
   ready('Ready', AppColors.success),
   optional('Optional', AppColors.warning),
-  missing('Missing', AppColors.danger);
+  missing('Missing', AppColors.danger),
+  blocked('Blocked', AppColors.danger);
 
   const _ReadinessState(this.label, this.color);
   final String label;
   final Color color;
+}
+
+_ReadinessState _nearbyReadinessState(NearbyPermissionState permission) {
+  return switch (permission.readiness) {
+    NearbyPermissionReadiness.ready => _ReadinessState.ready,
+    NearbyPermissionReadiness.optional => _ReadinessState.optional,
+    NearbyPermissionReadiness.blocked => _ReadinessState.blocked,
+    NearbyPermissionReadiness.missing => _ReadinessState.missing,
+  };
 }
 
 String? _validateTripName(String? value) {

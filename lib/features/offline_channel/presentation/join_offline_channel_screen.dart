@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../trip/data/trip_session_service.dart';
 import 'offline_channel_controller.dart';
 
 class JoinOfflineChannelScreen extends ConsumerStatefulWidget {
@@ -36,6 +37,9 @@ class _JoinOfflineChannelScreenState
     if (channel != null && mounted) {
       ref.invalidate(offlineChannelListProvider);
       ref.invalidate(activeOfflineChannelProvider);
+      ref.invalidate(activeUsableOfflineChannelProvider);
+      ref.invalidate(activeTripChannelProvider);
+      ref.invalidate(activeTripProvider);
       context.go('/offline-channel/${channel.channelId}');
     }
   }

@@ -140,6 +140,9 @@ class MessageDao {
       {
         'client_message_id': message.clientMessageId,
         'group_id': message.groupId,
+        'trip_id': message.tripId,
+        'channel_id': message.channelId,
+        'chat_id': message.chatId,
         'payload_json': payload,
         'queue_status': 'pending',
         'context_type': 'online_group',

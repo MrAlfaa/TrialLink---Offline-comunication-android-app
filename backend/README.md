@@ -13,7 +13,7 @@ Copy-Item .env.example .env
 Update `backend/.env` with your MongoDB Atlas connection string:
 
 ```env
-PORT=5000
+PORT=5001
 NODE_ENV=development
 MONGO_URI=mongodb+srv://<user>:<password>@<cluster-url>/traillink
 JWT_SECRET=replace_with_a_long_secure_random_secret
@@ -26,7 +26,7 @@ JWT_EXPIRES_IN=7d
 cmd /c npm run dev
 ```
 
-The API will run at `http://localhost:5000`.
+The API will run at `http://localhost:5001`.
 
 ## Endpoints
 
@@ -54,7 +54,7 @@ Auth and group routes use JSON responses with `{ success, message, data }`. Grou
 The backend runs Socket.IO on the same host and port as Express:
 
 ```text
-http://localhost:5000
+http://localhost:5001
 ```
 
 Socket clients authenticate with:

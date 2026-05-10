@@ -41,7 +41,8 @@ class ConnectivityController extends StateNotifier<ConnectivityState> {
   Future<void> refresh() async {
     state = state.copyWith(isRefreshing: true, errorMessage: null);
     try {
-      final activeChannel = await ref.read(activeOfflineChannelProvider.future);
+      final activeChannel =
+          await ref.read(activeUsableOfflineChannelProvider.future);
       final summary =
           await connectivityIntelligenceRepository.summary(activeChannel);
       if (!mounted) return;

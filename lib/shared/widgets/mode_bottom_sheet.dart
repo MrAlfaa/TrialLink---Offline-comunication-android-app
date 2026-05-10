@@ -26,7 +26,7 @@ class _ModeBottomSheetState extends ConsumerState<ModeBottomSheet> {
   @override
   Widget build(BuildContext context) {
     final modeState = ref.watch(modeControllerProvider);
-    final activeChannel = ref.watch(activeOfflineChannelProvider);
+    final activeChannel = ref.watch(activeUsableOfflineChannelProvider);
     final backendOnline = modeState.backendReachable;
 
     return SafeArea(

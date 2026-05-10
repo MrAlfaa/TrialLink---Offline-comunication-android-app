@@ -28,7 +28,8 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final modeState = ref.watch(modeControllerProvider);
     final groupsValue = ref.watch(myGroupsProvider);
-    final activeChannel = ref.watch(activeOfflineChannelProvider);
+    final activeChannel = ref.watch(activeUsableOfflineChannelProvider);
+    final activeTripChannel = ref.watch(activeTripChannelProvider);
     final authState = ref.watch(authControllerProvider);
     final authAccess = ref.watch(authAccessControllerProvider);
     final activeTrip = ref.watch(activeTripProvider);
@@ -37,7 +38,8 @@ class DashboardScreen extends ConsumerWidget {
         'Explorer';
 
     final groups = groupsValue.asData?.value ?? const <GroupModel>[];
-    final channel = activeChannel.asData?.value;
+    final channel =
+        activeChannel.asData?.value ?? activeTripChannel.asData?.value;
     final trip = activeTrip.asData?.value;
     final modeColor = _modeColor(modeState);
 
@@ -87,6 +89,8 @@ class DashboardScreen extends ConsumerWidget {
           onRefresh: () async {
             ref.invalidate(myGroupsProvider);
             ref.invalidate(activeOfflineChannelProvider);
+            ref.invalidate(activeUsableOfflineChannelProvider);
+            ref.invalidate(activeTripChannelProvider);
             await ref.read(connectionModeProvider.notifier).checkNow();
           },
           child: ListView(
@@ -459,6 +463,13 @@ class _DashboardHeroCard extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: () => context.go('/trips'),
+            icon: const Icon(Icons.route_rounded),
+            label: const Text('Manage Trips'),
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
+          ),
         ],
       ),
     );
@@ -798,7 +809,7 @@ List<_ActionSpec> _actionsFor({
       Icons.record_voice_over_rounded,
       AppColors.signalOrange,
       'voice_note_ptt',
-      () => _openPtt(context, groups, activeChannel),
+      () => _openPtt(context, groups, activeChannel, kind),
     ),
     _ActionSpec(
       'Compass',
@@ -865,14 +876,15 @@ void _openPtt(
   BuildContext context,
   List<GroupModel> groups,
   OfflineChannelModel? channel,
+  _DashboardKind kind,
 ) {
   if (channel != null) {
     context.go('/offline-channel/${channel.channelId}/ptt');
     return;
   }
-  if (groups.isNotEmpty) {
+  if (kind == _DashboardKind.online && groups.isNotEmpty) {
     context.go('/groups/${groups.first.id}/ptt');
     return;
   }
-  context.go('/groups');
+  context.go('/trip/setup-wizard');
 }

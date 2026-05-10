@@ -14,6 +14,9 @@ const messageSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    tripId: { type: String, trim: true, index: true },
+    channelId: { type: String, trim: true, index: true },
+    chatId: { type: String, trim: true, index: true },
     senderId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -70,5 +73,6 @@ const messageSchema = new mongoose.Schema(
 messageSchema.index({ clientMessageId: 1, senderId: 1 }, { unique: true });
 messageSchema.index({ originLocalId: 1, clientMessageId: 1, sourcePath: 1 });
 messageSchema.index({ groupId: 1, createdAt: -1 });
+messageSchema.index({ tripId: 1, channelId: 1, chatId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Message', messageSchema);

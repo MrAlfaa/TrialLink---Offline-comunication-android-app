@@ -13,6 +13,7 @@ class OfflinePacketService {
     required OfflineChannelModel channel,
     required CurrentUserActor actor,
     required String content,
+    String? chatId,
   }) {
     final messageId = _uuid.v4();
     return OfflinePacketModel(
@@ -20,6 +21,8 @@ class OfflinePacketService {
       packetType: 'text',
       channelId: channel.channelId,
       channelCode: channel.channelCode,
+      tripId: channel.tripId,
+      chatId: chatId,
       senderId: actor.backendUserId ?? actor.localUserId,
       senderLocalId: actor.localUserId,
       senderBackendId: actor.backendUserId,
@@ -31,6 +34,7 @@ class OfflinePacketService {
       payload: {
         'messageId': messageId,
         'clientMessageId': messageId,
+        if (chatId != null) 'chatId': chatId,
         'content': content,
         'originLocalId': actor.localUserId,
         'originBackendId': actor.backendUserId,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/config/env_config.dart';
 import '../core/identity/auth_access_controller.dart';
 import '../core/identity/auth_access_state.dart';
 import '../features/account_link/link_offline_data_screen.dart';
@@ -32,6 +33,7 @@ import '../features/help/manual_test_guide_screen.dart';
 import '../features/location/presentation/map_screen.dart';
 import '../features/groups/presentation/join_group_screen.dart';
 import '../features/offline_channel/presentation/create_offline_channel_screen.dart';
+import '../features/offline_channel/presentation/active_channel_debug_screen.dart';
 import '../features/offline_channel/presentation/join_offline_channel_screen.dart';
 import '../features/offline_channel/presentation/offline_channel_details_screen.dart';
 import '../features/offline_channel/presentation/offline_channel_list_screen.dart';
@@ -44,6 +46,7 @@ import '../features/setup/presentation/setup_screens.dart';
 import '../features/splash/splash_screen.dart';
 import '../features/trip/presentation/trip_setup_screen.dart';
 import '../features/trip/presentation/trip_setup_wizard_screen.dart';
+import '../features/trip_context/presentation/trip_management_screen.dart';
 import '../shared/widgets/trail_scaffold.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -219,6 +222,45 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state, child) => TrailScaffold(child: child),
         routes: [
           GoRoute(
+            path: '/trips/:tripId/channels/:channelId/chats/:chatId',
+            pageBuilder: (context, state) => _slidePage(
+              state,
+              OfflineChatScreen(
+                tripId: state.pathParameters['tripId']!,
+                channelId: state.pathParameters['channelId']!,
+                chatId: state.pathParameters['chatId']!,
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/trips/:tripId/channels/:channelId/chats',
+            pageBuilder: (context, state) => _slidePage(
+              state,
+              OfflineChatScreen(
+                tripId: state.pathParameters['tripId']!,
+                channelId: state.pathParameters['channelId']!,
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/offline-channel/:channelId/chat',
+            pageBuilder: (context, state) => _slidePage(
+              state,
+              OfflineChatRouteResolverScreen(
+                channelId: state.pathParameters['channelId']!,
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/offline-channels/:channelId/chat',
+            pageBuilder: (context, state) => _slidePage(
+              state,
+              OfflineChatRouteResolverScreen(
+                channelId: state.pathParameters['channelId']!,
+              ),
+            ),
+          ),
+          GoRoute(
             path: '/home',
             pageBuilder: (context, state) => _fadePage(
               state,
@@ -245,6 +287,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               TripSetupWizardScreen(
                 initialIntent: state.uri.queryParameters['intent'],
               ),
+            ),
+          ),
+          GoRoute(
+            path: '/trips',
+            pageBuilder: (context, state) => _slidePage(
+              state,
+              const TripManagementScreen(),
             ),
           ),
           GoRoute(
@@ -382,15 +431,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 ),
                 routes: [
                   GoRoute(
-                    path: 'chat',
-                    pageBuilder: (context, state) => _slidePage(
-                      state,
-                      OfflineChatScreen(
-                        channelId: state.pathParameters['channelId']!,
-                      ),
-                    ),
-                  ),
-                  GoRoute(
                     path: 'sos',
                     pageBuilder: (context, state) => _slidePage(
                       state,
@@ -434,6 +474,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             pageBuilder: (context, state) => _fadePage(
               state,
               const BridgeDebugScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/debug/active-channel',
+            redirect: (context, state) =>
+                EnvConfig.appEnv == 'production' ? '/home' : null,
+            pageBuilder: (context, state) => _fadePage(
+              state,
+              const ActiveChannelDebugScreen(),
             ),
           ),
           GoRoute(

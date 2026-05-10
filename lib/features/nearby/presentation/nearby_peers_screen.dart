@@ -18,7 +18,7 @@ class NearbyPeersScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final actor = ref.watch(currentUserActorProvider);
-    final activeChannel = ref.watch(activeOfflineChannelProvider);
+    final activeChannel = ref.watch(activeUsableOfflineChannelProvider);
     final modeState = ref.watch(modeControllerProvider);
 
     return Scaffold(

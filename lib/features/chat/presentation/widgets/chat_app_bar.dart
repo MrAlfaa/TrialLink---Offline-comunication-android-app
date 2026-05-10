@@ -37,7 +37,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      titleSpacing: 0,
+      titleSpacing: NavigationToolbar.kMiddleSpacing,
       toolbarHeight: 70,
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -78,7 +78,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                 alignment: Alignment.centerLeft,
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.fromLTRB(56, 0, 16, 10),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                   child: Row(
                     children: [
                       for (final chip in chips) ...[

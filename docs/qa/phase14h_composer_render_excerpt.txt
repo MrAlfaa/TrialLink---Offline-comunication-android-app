@@ -1,0 +1,150 @@
+       ¦   ¦                             ¦   ¦   weight: 700
+                     ?                       ¦   ¦                             ¦   ¦   letterSpacing: 0.0
+                     ?                       ¦   ¦                             ¦   ¦   baseline: alphabetic
+                     ?                       ¦   ¦                             ¦   ¦   height: 1.5x
+                     ?                       ¦   ¦                             ¦   ¦   leadingDistribution: even
+                     ?                       ¦   ¦                             ¦   ¦   decoration: Color(alpha: 1.0000, red: 0.0902, green: 0.1137,
+                     ?                       ¦   ¦                             ¦   ¦     blue: 0.1020, colorSpace: ColorSpace.sRGB) TextDecoration.none
+                     ?                       ¦   ¦                             ¦   ¦   "No offline messages yet."
+                     ?                       ¦   ¦                             ¦   +-----------
+                     ?                       ¦   ¦                             +-child 4: RenderConstrainedBox#b45b2 NEEDS-LAYOUT NEEDS-PAINT
+                     ?                       ¦   ¦                             ¦   creator: SizedBox ? Column ? Padding ?
+                     ?                       ¦   ¦                             ¦     Center-[<'offline-chat-empty-state'>] ? _EmptyOfflineChat ?
+                     ?                       ¦   ¦                             ¦     _SliverFillRemainingWithScrollable ? SliverFillRemaining ?
+                     ?                       ¦   ¦                             ¦     Viewport ? IgnorePointer-[GlobalKey#6cdf1] ? Semantics ?
+                     ?                       ¦   ¦                             ¦     Listener ? _GestureSemantics ? ?
+                     ?                       ¦   ¦                             ¦   parentData: offset=Offset(0.0, 0.0); flex=null; fit=null
+                     ?                       ¦   ¦                             ¦   constraints: MISSING
+                     ?                       ¦   ¦                             ¦   size: MISSING
+                     ?                       ¦   ¦                             ¦   additionalConstraints: BoxConstraints(0.0<=w<=Infinity, h=6.0)
+                     ?                       ¦   ¦                             ¦
+                     ?                       ¦   ¦                             +-child 5: RenderParagraph#38a45 NEEDS-LAYOUT NEEDS-PAINT
+                     ?                       ¦   ¦                               ¦ creator: RichText ? Text ? Column ? Padding ?
+                     ?                       ¦   ¦                               ¦   Center-[<'offline-chat-empty-state'>] ? _EmptyOfflineChat ?
+                     ?                       ¦   ¦                               ¦   _SliverFillRemainingWithScrollable ? SliverFillRemaining ?
+                     ?                       ¦   ¦                               ¦   Viewport ? IgnorePointer-[GlobalKey#6cdf1] ? Semantics ?
+                     ?                       ¦   ¦                               ¦   Listener ? ?
+                     ?                       ¦   ¦                               ¦ parentData: offset=Offset(0.0, 0.0); flex=null; fit=null
+                     ?                       ¦   ¦                               ¦ constraints: MISSING
+                     ?                       ¦   ¦                               ¦ size: MISSING
+                     ?                       ¦   ¦                               ¦ textAlign: center
+                     ?                       ¦   ¦                               ¦ textDirection: ltr
+                     ?                       ¦   ¦                               ¦ softWrap: wrapping at box width
+                     ?                       ¦   ¦                               ¦ overflow: clip
+                     ?                       ¦   ¦                               ¦ textScaler: SystemTextScaler (0.9x)
+                     ?                       ¦   ¦                               ¦ locale: en_US
+                     ?                       ¦   ¦                               ¦ maxLines: unlimited
+                     ?                       ¦   ¦                               +---- text ---
+                     ?                       ¦   ¦                                 ¦ TextSpan:
+                     ?                       ¦   ¦                                 ¦   debugLabel: (((englishLike bodyMedium
+                     ?                       ¦   ¦                                 ¦     2021).merge(((((blackMountainView
+                     ?                       ¦   ¦                                 ¦     bodyMedium).apply).apply).apply).merge(unknown))).copyWith).merge(unknown)
+                     ?                       ¦   ¦                                 ¦   inherit: false
+                     ?                       ¦   ¦                                 ¦   color: Color(alpha: 1.0000, red: 0.3922, green: 0.4549, blue:
+                     ?                       ¦   ¦                                 ¦     0.5451, colorSpace: ColorSpace.sRGB)
+                     ?                       ¦   ¦                                 ¦   family: Inter
+                     ?                       ¦   ¦                                 ¦   familyFallback: Roboto, Segoe UI, Arial, sans-serif
+                     ?                       ¦   ¦                                 ¦   size: 14.0
+                     ?                       ¦   ¦                                 ¦   weight: 700
+                     ?                       ¦   ¦                                 ¦   letterSpacing: 0.0
+                     ?                       ¦   ¦                                 ¦   baseline: alphabetic
+                     ?                       ¦   ¦                                 ¦   height: 1.4x
+                     ?                       ¦   ¦                                 ¦   leadingDistribution: even
+                     ?                       ¦   ¦                                 ¦   decoration: Color(alpha: 1.0000, red: 0.0902, green: 0.1137,
+                     ?                       ¦   ¦                                 ¦     blue: 0.1020, colorSpace: ColorSpace.sRGB) TextDecoration.none
+                     ?                       ¦   ¦                                 ¦   "Messages are saved locally first and sent when a nearby peer is
+                     ?                       ¦   ¦                                 ¦   connected."
+                     ?                       ¦   ¦                                 +-----------
+                     ?                       ¦   +-child 2: RenderSemanticsAnnotations#1d7af relayoutBoundary=up3
+                     ?                       ¦     ¦ needs compositing
+                     ?                       ¦     ¦ creator: Semantics ? OfflineChatInputBar ? Column ? MediaQuery ?
+                     ?                       ¦     ¦   Padding ? SafeArea ? KeyedSubtree-[GlobalKey#df037] ?
+                     ?                       ¦     ¦   _BodyBuilder ? MediaQuery ? LayoutId-[<_ScaffoldSlot.body>] ?
+                     ?                       ¦     ¦   CustomMultiChildLayout ? _ActionsScope ? ?
+                     ?                       ¦     ¦ parentData: offset=Offset(0.0, 0.0); flex=null; fit=null (can use
+                     ?                       ¦     ¦   size)
+                     ?                       ¦     ¦ constraints: BoxConstraints(0.0<=w<=411.4, 0.0<=h<=Infinity)
+                     ?                       ¦     ¦ semantic boundary
+                     ?                       ¦     ¦ size: MISSING
+                     ?                       ¦     ¦
+                     ?                       ¦     +-child: RenderPadding#a5d63 relayoutBoundary=up4
+                     ?                       ¦       ¦ needs compositing
+                     ?                       ¦       ¦ creator: Padding ? SafeArea-[<'offline-chat-composer'>] ?
+                     ?                       ¦       ¦   Semantics ? OfflineChatInputBar ? Column ? MediaQuery ? Padding
+                     ?                       ¦       ¦   ? SafeArea ? KeyedSubtree-[GlobalKey#df037] ? _BodyBuilder ?
+                     ?                       ¦       ¦   MediaQuery ? LayoutId-[<_ScaffoldSlot.body>] ? ?
+                     ?                       ¦       ¦ parentData: <none> (can use size)
+                     ?                       ¦       ¦ constraints: BoxConstraints(0.0<=w<=411.4, 0.0<=h<=Infinity)
+                     ?                       ¦       ¦ size: MISSING
+                     ?                       ¦       ¦ padding: EdgeInsets.zero
+                     ?                       ¦       ¦ textDirection: ltr
+                     ?                       ¦       ¦
+                     ?                       ¦       +-child: RenderPadding#95db0 relayoutBoundary=up5
+                     ?                       ¦         ¦ needs compositing
+                     ?                       ¦         ¦ creator: Padding ? Container ? MediaQuery ? Padding ?
+                     ?                       ¦         ¦   SafeArea-[<'offline-chat-composer'>] ? Semantics ?
+                     ?                       ¦         ¦   OfflineChatInputBar ? Column ? MediaQuery ? Padding ? SafeArea
+                     ?                       ¦         ¦   ? KeyedSubtree-[GlobalKey#df037] ? ?
+                     ?                       ¦         ¦ parentData: offset=Offset(0.0, 0.0) (can use size)
+                     ?                       ¦         ¦ constraints: BoxConstraints(0.0<=w<=411.4, 0.0<=h<=Infinity)
+                     ?                       ¦         ¦ size: MISSING
+                     ?                       ¦         ¦ padding: EdgeInsets(12.0, 8.0, 12.0, 8.0)
+                     ?                       ¦         ¦ textDirection: ltr
+                     ?                       ¦         ¦
+                     ?                       ¦         +-child: RenderConstrainedBox#559fd relayoutBoundary=up6
+                     ?                       ¦           ¦ needs compositing
+                     ?                       ¦           ¦ creator: ConstrainedBox ? Padding ? Container ? MediaQuery ?
+                     ?                       ¦           ¦   Padding ? SafeArea-[<'offline-chat-composer'>] ? Semantics ?
+                     ?                       ¦           ¦   OfflineChatInputBar ? Column ? MediaQuery ? Padding ? SafeArea
+                     ?                       ¦           ¦   ? ?
+                     ?                       ¦           ¦ parentData: offset=Offset(12.0, 8.0) (can use size)
+                     ?                       ¦           ¦ constraints: BoxConstraints(0.0<=w<=387.4, 0.0<=h<=Infinity)
+                     ?                       ¦           ¦ size: MISSING
+                     ?                       ¦           ¦ additionalConstraints: BoxConstraints(0.0<=w<=Infinity,
+                     ?                       ¦           ¦   126.0<=h<=Infinity)
+                     ?                       ¦           ¦
+                     ?                       ¦           +-child: RenderDecoratedBox#5da96 relayoutBoundary=up7
+                     ?                       ¦             ¦ needs compositing
+                     ?                       ¦             ¦ creator: DecoratedBox ? ConstrainedBox ? Padding ? Container ?
+                     ?                       ¦             ¦   MediaQuery ? Padding ? SafeArea-[<'offline-chat-composer'>] ?
+                     ?                       ¦             ¦   Semantics ? OfflineChatInputBar ? Column ? MediaQuery ? Padding
+                     ?                       ¦             ¦   ? ?
+                     ?                       ¦             ¦ parentData: <none> (can use size)
+                     ?                       ¦             ¦ constraints: BoxConstraints(0.0<=w<=387.4, 126.0<=h<=Infinity)
+                     ?                       ¦             ¦ size: MISSING
+                     ?                       ¦             ¦ decoration: BoxDecoration:
+                     ?                       ¦             ¦   color: Color(alpha: 1.0000, red: 1.0000, green: 1.0000, blue:
+                     ?                       ¦             ¦     1.0000, colorSpace: ColorSpace.sRGB)
+                     ?                       ¦             ¦   border: Border.all(BorderSide(color: Color(alpha: 0.1800, red:
+                     ?                       ¦             ¦     0.4863, green: 0.2275, blue: 0.9294, colorSpace:
+                     ?                       ¦             ¦     ColorSpace.sRGB)))
+                     ?                       ¦             ¦   borderRadius: BorderRadius.circular(20.0)
+                     ?                       ¦             ¦   boxShadow: BoxShadow(Color(alpha: 0.0800, red: 0.0000, green:
+                     ?                       ¦             ¦     0.0000, blue: 0.0000, colorSpace: ColorSpace.sRGB), Offset(0.0,
+                     ?                       ¦             ¦     -4.0), 16.0, 0.0, BlurStyle.normal)
+                     ?                       ¦             ¦ configuration: ImageConfiguration(bundle:
+                     ?                       ¦             ¦   PlatformAssetBundle#151a7(), devicePixelRatio: 1.8, locale:
+                     ?                       ¦             ¦   en_US, textDirection: TextDirection.ltr, platform: android)
+                     ?                       ¦             ¦
+                     ?                       ¦             +-child: RenderPadding#3e971 relayoutBoundary=up8 NEEDS-PAINT
+                     ?                       ¦               ¦ needs compositing
+                     ?                       ¦               ¦ creator: Padding ? DecoratedBox ? ConstrainedBox ? Padding ?
+                     ?                       ¦               ¦   Container ? MediaQuery ? Padding ?
+                     ?                       ¦               ¦   SafeArea-[<'offline-chat-composer'>] ? Semantics ?
+                     ?                       ¦               ¦   OfflineChatInputBar ? Column ? MediaQuery ? ?
+                     ?                       ¦               ¦ parentData: <none> (can use size)
+                     ?                       ¦               ¦ constraints: BoxConstraints(0.0<=w<=387.4, 126.0<=h<=Infinity)
+                     ?                       ¦               ¦ size: MISSING
+                     ?                       ¦               ¦ padding: EdgeInsets(13.0, 11.0, 13.0, 13.0)
+                     ?                       ¦               ¦ textDirection: ltr
+                     ?                       ¦               ¦
+                     ?                       ¦               +-child: RenderFlex#3d789 relayoutBoundary=up9 NEEDS-PAINT
+                     ?                       ¦                 ¦ needs compositing
+                     ?                       ¦                 ¦ creator: Row ? Padding ? DecoratedBox ? ConstrainedBox ? Padding
+                     ?                       ¦                 ¦   ? Container ? MediaQuery ? Padding ?
+                     ?                       ¦                 ¦   SafeArea-[<'offline-chat-composer'>] ? Semantics ?
+                     ?                       ¦                 ¦   OfflineChatInputBar ? Column ? ?
+                     ?                       ¦                 ¦ parentData: offset=Offset(13.0, 11.0) (can use size)
+                     ?                       ¦                 ¦ constraints: BoxConstraints(0.0<=w<=361.4, 102.0<=h<=Infinity)
+                     ?                       ¦                 ¦ size: MISSING
+                     ?                       ¦                 ¦ direction: horizonta

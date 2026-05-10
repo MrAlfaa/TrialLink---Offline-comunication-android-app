@@ -7,6 +7,7 @@ import '../../../core/identity/auth_access_controller.dart';
 import '../../../core/identity/current_user_actor.dart';
 import '../../../shared/widgets/compact_status_chip.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../trip_context/data/trip_context_service.dart';
 import '../data/models/offline_channel_member_model.dart';
 import '../data/models/offline_channel_model.dart';
 import 'offline_channel_controller.dart';
@@ -29,6 +30,7 @@ class OfflineChannelDetailsScreen extends ConsumerWidget {
     final controller = ref.read(offlineChannelControllerProvider.notifier);
     final user = ref.watch(authControllerProvider).user;
     final actor = _actorFor(user, ref.watch(authAccessControllerProvider));
+    final activeContext = ref.watch(activeTripContextProvider).asData?.value;
 
     return DefaultTabController(
       length: 4,
@@ -102,6 +104,14 @@ class OfflineChannelDetailsScreen extends ConsumerWidget {
                         onEnd: actor == null || channel.isEnded
                             ? null
                             : () => _confirmEndChannel(context, ref, channel),
+                        activeTripId: activeContext?.activeChannel?.channelId ==
+                                channel.channelId
+                            ? activeContext?.trip.tripId
+                            : null,
+                        activeChatId: activeContext?.activeChannel?.channelId ==
+                                channel.channelId
+                            ? activeContext?.activeChat?.chatId
+                            : null,
                       ),
                       _MembersTab(members: members),
                       _InfoTab(
@@ -217,6 +227,8 @@ class _OverviewTab extends StatelessWidget {
     required this.onSetActive,
     required this.onSetInactive,
     required this.onEnd,
+    this.activeTripId,
+    this.activeChatId,
   });
 
   final String channelId;
@@ -230,6 +242,8 @@ class _OverviewTab extends StatelessWidget {
   final VoidCallback? onSetActive;
   final VoidCallback? onSetInactive;
   final VoidCallback? onEnd;
+  final String? activeTripId;
+  final String? activeChatId;
 
   @override
   Widget build(BuildContext context) {
@@ -304,9 +318,7 @@ class _OverviewTab extends StatelessWidget {
                   const SizedBox(height: 14),
                 ],
                 FilledButton.icon(
-                  onPressed: isEnded
-                      ? null
-                      : () => context.go('/offline-channel/$channelId/chat'),
+                  onPressed: isEnded ? null : () => _openChat(context),
                   icon: const Icon(Icons.chat_rounded),
                   label: const Text('Open Offline Chat'),
                 ),
@@ -354,6 +366,19 @@ class _OverviewTab extends StatelessWidget {
     if (diff.inHours < 1) return '${diff.inMinutes} min ago';
     if (diff.inDays < 1) return '${diff.inHours} hr ago';
     return '${diff.inDays} d ago';
+  }
+
+  void _openChat(BuildContext context) {
+    if (activeTripId != null &&
+        activeTripId!.isNotEmpty &&
+        activeChatId != null &&
+        activeChatId!.isNotEmpty) {
+      context.go(
+        '/trips/$activeTripId/channels/$channelId/chats/$activeChatId',
+      );
+      return;
+    }
+    context.go('/offline-channel/$channelId/chat');
   }
 }
 

@@ -40,6 +40,10 @@ class MessageSyncService {
               'content': payload['content'],
               'messageType': payload['messageType'] ?? 'text',
               'createdAt': payload['createdAt'],
+              if (payload['tripId'] != null) 'tripId': payload['tripId'],
+              if (payload['channelId'] != null)
+                'channelId': payload['channelId'],
+              if (payload['chatId'] != null) 'chatId': payload['chatId'],
             },
           )
           .toList();

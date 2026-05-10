@@ -44,6 +44,31 @@ class OfflineChannelLocalDataSource {
     return rows.isEmpty ? null : OfflineChannelModel.fromDb(rows.first);
   }
 
+  Future<OfflineChannelModel?> getActiveChannelByFlag() async {
+    final db = await _database.database;
+    final rows = await db.query(
+      'offline_channels',
+      where: 'is_active = ? AND channel_status = ?',
+      whereArgs: [1, 'active'],
+      orderBy: 'last_opened_at DESC, updated_at DESC, created_at DESC',
+      limit: 1,
+    );
+    return rows.isEmpty ? null : OfflineChannelModel.fromDb(rows.first);
+  }
+
+  Future<int> countActiveMembers(String channelId) async {
+    final db = await _database.database;
+    final rows = await db.rawQuery(
+      '''
+      SELECT COUNT(*) AS member_count
+      FROM offline_channel_members
+      WHERE channel_id = ? AND membership_status = ?
+      ''',
+      [channelId, 'active'],
+    );
+    return Sqflite.firstIntValue(rows) ?? 0;
+  }
+
   Future<OfflineChannelMemberModel?> getMember({
     required String channelId,
     required String userId,
@@ -59,6 +84,8 @@ class OfflineChannelLocalDataSource {
   }
 
   Future<OfflineChannelModel?> getActiveChannel() async {
+    final flagged = await getActiveChannelByFlag();
+    if (flagged?.isUsable == true) return flagged;
     final activeId = await _database.readSetting('active_offline_channel_id');
     if (activeId == null || activeId.isEmpty) return null;
     final channel = await getChannel(activeId);

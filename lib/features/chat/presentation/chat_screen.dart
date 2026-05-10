@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../trip_context/data/trip_context_service.dart';
 import '../data/socket_service.dart';
 import 'chat_mode_label.dart';
 import 'chat_controller.dart';
@@ -57,10 +58,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       );
     }
 
+    final activeContext = ref.watch(activeTripContextProvider).asData?.value;
+    final activeChat =
+        activeContext?.cloudGroupId == widget.groupId ? activeContext : null;
     final args = ChatSessionArgs(
       groupId: widget.groupId,
       groupName: widget.groupName,
       currentUser: user,
+      tripId: activeChat?.trip.tripId,
+      channelId: activeChat?.activeChannel?.channelId,
+      chatId: activeChat?.activeChat?.chatId,
     );
     final state = ref.watch(chatControllerProvider(args));
     final controller = ref.read(chatControllerProvider(args).notifier);
@@ -73,76 +80,80 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         chips: _chatHeaderChips(state),
         onDetailsPressed: () => context.go('/groups/${widget.groupId}'),
       ),
-      body: Column(
-        children: [
-          if (state.errorMessage != null)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: AppColors.warning.withValues(alpha: 0.12),
-              child: Text(
-                state.errorMessage!,
-                style: const TextStyle(color: AppColors.warning),
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            if (state.errorMessage != null)
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: AppColors.warning.withValues(alpha: 0.12),
+                child: Text(
+                  state.errorMessage!,
+                  style: const TextStyle(color: AppColors.warning),
+                ),
               ),
+            Expanded(
+              child: state.isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : RefreshIndicator(
+                      onRefresh: controller.refresh,
+                      child: state.messages.isEmpty
+                          ? const CustomScrollView(
+                              physics: AlwaysScrollableScrollPhysics(),
+                              slivers: [
+                                SliverFillRemaining(child: EmptyChatState()),
+                              ],
+                            )
+                          : ListView.builder(
+                              controller: _scrollController,
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: const EdgeInsets.fromLTRB(0, 12, 0, 18),
+                              itemCount: state.messages.length,
+                              itemBuilder: (context, index) {
+                                final message = state.messages[index];
+                                return TweenAnimationBuilder<double>(
+                                  tween: Tween(begin: 0, end: 1),
+                                  duration: Duration(
+                                      milliseconds: 180 + (index % 4) * 45),
+                                  curve: Curves.easeOutCubic,
+                                  builder: (context, value, child) {
+                                    return Opacity(
+                                      opacity: value,
+                                      child: Transform.translate(
+                                        offset: Offset(0, 12 * (1 - value)),
+                                        child: child,
+                                      ),
+                                    );
+                                  },
+                                  child: MessageBubble(
+                                    message: message,
+                                    onRetry: () =>
+                                        controller.retryMessage(message),
+                                    onPlayMedia: () =>
+                                        controller.playMedia(message),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
             ),
-          Expanded(
-            child: state.isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : RefreshIndicator(
-                    onRefresh: controller.refresh,
-                    child: state.messages.isEmpty
-                        ? const CustomScrollView(
-                            physics: AlwaysScrollableScrollPhysics(),
-                            slivers: [
-                              SliverFillRemaining(child: EmptyChatState()),
-                            ],
-                          )
-                        : ListView.builder(
-                            controller: _scrollController,
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            padding: const EdgeInsets.fromLTRB(0, 12, 0, 18),
-                            itemCount: state.messages.length,
-                            itemBuilder: (context, index) {
-                              final message = state.messages[index];
-                              return TweenAnimationBuilder<double>(
-                                tween: Tween(begin: 0, end: 1),
-                                duration: Duration(
-                                    milliseconds: 180 + (index % 4) * 45),
-                                curve: Curves.easeOutCubic,
-                                builder: (context, value, child) {
-                                  return Opacity(
-                                    opacity: value,
-                                    child: Transform.translate(
-                                      offset: Offset(0, 12 * (1 - value)),
-                                      child: child,
-                                    ),
-                                  );
-                                },
-                                child: MessageBubble(
-                                  message: message,
-                                  onRetry: () =>
-                                      controller.retryMessage(message),
-                                  onPlayMedia: () =>
-                                      controller.playMedia(message),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-          ),
-          ChatInputBar(
-            onSend: controller.sendMessage,
-            onPickImage: controller.sendImageFromGallery,
-            onStartVoiceRecording: controller.startVoiceRecording,
-            onStopVoiceRecording: controller.stopAndSendVoiceNote,
-            onCancelVoiceRecording: controller.cancelVoiceRecording,
-            isOnlineMediaAvailable: state.isOnline &&
-                state.socketStatus == ChatSocketStatus.connected,
-            offlineHint: state.isOnline
-                ? null
-                : 'Media is online-only. Offline mode supports text and voice-note PTT.',
-          ),
-        ],
+            ChatInputBar(
+              onSend: controller.sendMessage,
+              onPickImage: controller.sendImageFromGallery,
+              onStartVoiceRecording: controller.startVoiceRecording,
+              onStopVoiceRecording: controller.stopAndSendVoiceNote,
+              onCancelVoiceRecording: controller.cancelVoiceRecording,
+              isOnlineMediaAvailable: state.isOnline &&
+                  state.socketStatus == ChatSocketStatus.connected,
+              offlineHint: state.isOnline
+                  ? null
+                  : 'Media is online-only. Offline mode supports text and voice-note PTT.',
+            ),
+          ],
+        ),
       ),
     );
   }

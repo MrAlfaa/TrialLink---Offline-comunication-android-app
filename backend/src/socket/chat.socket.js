@@ -32,7 +32,16 @@ const registerChatSocket = (io, socket) => {
 
   socket.on('send_group_message', async (payload = {}) => {
     try {
-      const { clientMessageId, groupId, content, messageType = 'text', createdAt } = payload;
+      const {
+        clientMessageId,
+        groupId,
+        tripId,
+        channelId,
+        chatId,
+        content,
+        messageType = 'text',
+        createdAt,
+      } = payload;
 
       if (!clientMessageId || !groupId || !content || !content.trim()) {
         return emitSocketError(socket, 'VALIDATION_ERROR', 'Message content is required');
@@ -42,6 +51,9 @@ const registerChatSocket = (io, socket) => {
         groupId,
         userId: socket.user._id,
         clientMessageId,
+        tripId,
+        channelId,
+        chatId,
         content,
         messageType,
         createdAt,

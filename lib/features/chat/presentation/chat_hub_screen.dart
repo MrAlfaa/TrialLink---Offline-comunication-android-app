@@ -10,6 +10,7 @@ import '../../offline_channel/data/models/offline_channel_model.dart';
 import '../../offline_channel/presentation/offline_channel_controller.dart';
 import '../../trip/data/trip_session_model.dart';
 import '../../trip/data/trip_session_service.dart';
+import '../../trip_context/data/trip_context_service.dart';
 
 class ChatHubScreen extends ConsumerStatefulWidget {
   const ChatHubScreen({
@@ -52,9 +53,14 @@ class _ChatHubScreenState extends ConsumerState<ChatHubScreen> {
   @override
   Widget build(BuildContext context) {
     final activeTrip = ref.watch(activeTripProvider);
+    final activeContext = ref.watch(activeTripContextProvider).asData?.value;
     final trip = activeTrip.asData?.value;
     final groupsState = ref.watch(myGroupsControllerProvider);
     final channelsValue = ref.watch(offlineChannelListProvider);
+    final activeTripChannel = ref.watch(activeTripChannelProvider);
+    final activeUsableChannel = ref.watch(activeUsableOfflineChannelProvider);
+    final channel =
+        activeTripChannel.asData?.value ?? activeUsableChannel.asData?.value;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Messages')),
@@ -69,11 +75,17 @@ class _ChatHubScreenState extends ConsumerState<ChatHubScreen> {
                           .read(myGroupsControllerProvider.notifier)
                           .load();
                       ref.invalidate(offlineChannelListProvider);
+                      ref.invalidate(activeTripChannelProvider);
+                      ref.invalidate(activeUsableOfflineChannelProvider);
                     },
                     child: ListView(
                       padding: const EdgeInsets.fromLTRB(18, 8, 18, 112),
                       children: [
-                        _TripMessageShortcuts(trip: trip),
+                        _TripMessageShortcuts(
+                          trip: trip,
+                          channel: channel,
+                          chatId: activeContext?.activeChat?.chatId,
+                        ),
                         const SizedBox(height: 18),
                         Text(
                           'Create a group or join a team using a TrailLink code.',
@@ -195,9 +207,15 @@ class _NoTripMessagesPrompt extends StatelessWidget {
 }
 
 class _TripMessageShortcuts extends StatelessWidget {
-  const _TripMessageShortcuts({required this.trip});
+  const _TripMessageShortcuts({
+    required this.trip,
+    required this.channel,
+    this.chatId,
+  });
 
   final TripSessionModel trip;
+  final OfflineChannelModel? channel;
+  final String? chatId;
 
   @override
   Widget build(BuildContext context) {
@@ -235,14 +253,13 @@ class _TripMessageShortcuts extends StatelessWidget {
                 icon: Icons.cloud_done_rounded,
                 onTap: () => context.go('/groups/${trip.cloudGroupId}/chat'),
               ),
-            if (offline && trip.offlineChannelId != null)
+            if (offline && channel != null)
               _ShortcutButton(
                 label: 'Offline Channel Chat',
                 icon: Icons.hub_rounded,
-                onTap: () => context
-                    .go('/offline-channel/${trip.offlineChannelId}/chat'),
+                onTap: () => _openOfflineChat(context, trip, channel!, chatId),
               ),
-            if (trip.isOffline && trip.offlineChannelId != null) ...[
+            if (trip.isOffline && channel != null) ...[
               _ShortcutButton(
                 label: 'Nearby Peers',
                 icon: Icons.people_alt_rounded,
@@ -251,8 +268,7 @@ class _TripMessageShortcuts extends StatelessWidget {
               _ShortcutButton(
                 label: 'Channel Details',
                 icon: Icons.info_outline_rounded,
-                onTap: () =>
-                    context.go('/offline-channel/${trip.offlineChannelId}'),
+                onTap: () => _openOfflineDetails(context, channel!),
               ),
             ],
             const _ShortcutButton(
@@ -264,6 +280,24 @@ class _TripMessageShortcuts extends StatelessWidget {
       ),
     );
   }
+}
+
+void _openOfflineChat(
+  BuildContext context,
+  TripSessionModel trip,
+  OfflineChannelModel channel,
+  String? chatId,
+) {
+  if (chatId != null && chatId.isNotEmpty) {
+    context.go(
+        '/trips/${trip.tripId}/channels/${channel.channelId}/chats/$chatId');
+    return;
+  }
+  context.go('/offline-channel/${channel.channelId}/chat');
+}
+
+void _openOfflineDetails(BuildContext context, OfflineChannelModel channel) {
+  context.go('/offline-channel/${channel.channelId}');
 }
 
 class _ShortcutButton extends StatelessWidget {

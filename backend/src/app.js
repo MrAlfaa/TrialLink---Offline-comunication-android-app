@@ -8,6 +8,7 @@ const healthRoutes = require('./routes/health.routes');
 const authRoutes = require('./modules/auth/auth.routes');
 const groupRoutes = require('./modules/groups/group.routes');
 const identityRoutes = require('./modules/identity/identity.routes');
+const tripContextRoutes = require('./modules/tripContext/tripContext.routes');
 const { errorHandler, notFound } = require('./middleware/error.middleware');
 
 const app = express();
@@ -26,6 +27,7 @@ app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/identity', identityRoutes);
 app.use('/api/groups', groupRoutes);
+app.use('/api/trip-context', tripContextRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

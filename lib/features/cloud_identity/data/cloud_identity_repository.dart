@@ -88,7 +88,7 @@ class CloudIdentityRepository {
       );
     } on DioException catch (error) {
       final statusCode = error.response?.statusCode;
-      final message = _extractErrorMessage(error);
+      final message = cloudSetupFailureMessageForDio(error);
       await _identityRepository.markCloudFailure(message);
       return CloudBootstrapResult.failure(
         message,
@@ -128,18 +128,24 @@ class CloudIdentityRepository {
     );
   }
 
-  String _extractErrorMessage(DioException error) {
-    final data = error.response?.data;
-    if (data is Map<String, dynamic>) {
-      final message = data['message']?.toString();
-      if (message != null && message.isNotEmpty) return message;
+  static String cloudSetupFailureMessageForDio(
+    DioException error, {
+    bool hasNetworkInterface = true,
+  }) {
+    if (!hasNetworkInterface) {
+      return 'No internet connection.';
+    }
+    if (error.response?.statusCode == 409) {
+      return 'This email is already linked to another TrailLink profile.';
     }
     if (error.type == DioExceptionType.connectionTimeout ||
         error.type == DioExceptionType.receiveTimeout ||
-        error.type == DioExceptionType.connectionError) {
-      return 'TrailLink backend is not reachable. Continue offline and try cloud profile creation again when the backend is online.';
+        error.type == DioExceptionType.sendTimeout) {
+      return 'Cloud setup timed out.';
     }
-    return error.message ??
-        'Cloud account creation failed. Continue offline and try again.';
+    if (error.type == DioExceptionType.connectionError) {
+      return 'TrailLink cloud server is unreachable.';
+    }
+    return 'Cloud account creation failed.';
   }
 }

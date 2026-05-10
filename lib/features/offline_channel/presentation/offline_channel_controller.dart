@@ -5,6 +5,9 @@ import '../../../core/identity/current_user_actor.dart';
 import '../../../core/identity/local_identity_repository.dart';
 import '../../../core/identity/local_identity_model.dart';
 import '../../nearby/presentation/nearby_controller.dart';
+import '../../trip_context/data/trip_context_service.dart';
+import '../../trip/data/trip_session_repository.dart';
+import '../data/active_offline_channel_resolver.dart';
 import '../data/models/offline_channel_member_model.dart';
 import '../data/models/offline_channel_model.dart';
 import '../data/offline_channel_repository.dart';
@@ -16,14 +19,46 @@ final offlineChannelRepositoryProvider =
   );
 });
 
+final activeOfflineChannelResolverProvider =
+    Provider<ActiveOfflineChannelResolver>((ref) {
+  return ActiveOfflineChannelResolver(
+    channelRepository: ref.read(offlineChannelRepositoryProvider),
+    identityRepository: ref.read(localIdentityRepositoryProvider),
+  );
+});
+
 final offlineChannelListProvider =
+    FutureProvider<List<OfflineChannelModel>>((ref) async {
+  await ref
+      .read(activeOfflineChannelResolverProvider)
+      .repairActiveChannelFromActiveTripIfNeeded();
+  return ref.read(offlineChannelRepositoryProvider).getChannels();
+});
+
+final rawOfflineChannelListProvider =
     FutureProvider<List<OfflineChannelModel>>((ref) {
   return ref.read(offlineChannelRepositoryProvider).getChannels();
 });
 
 final activeOfflineChannelProvider =
     FutureProvider<OfflineChannelModel?>((ref) {
-  return ref.read(offlineChannelRepositoryProvider).getActiveChannel();
+  return ref.watch(activeTripContextProvider.future).then(
+        (context) => context?.activeChannel,
+      );
+});
+
+final activeUsableOfflineChannelProvider =
+    FutureProvider<OfflineChannelModel?>((ref) {
+  return ref.watch(activeTripContextProvider.future).then((context) {
+    final channel = context?.activeChannel;
+    return channel?.isUsable == true ? channel : null;
+  });
+});
+
+final activeTripChannelProvider = FutureProvider<OfflineChannelModel?>((ref) {
+  return ref.watch(activeTripContextProvider.future).then(
+        (context) => context?.activeChannel,
+      );
 });
 
 final offlineChannelDetailsProvider =
@@ -53,11 +88,17 @@ class OfflineChannelMutationState {
 
 class OfflineChannelController
     extends StateNotifier<OfflineChannelMutationState> {
-  OfflineChannelController(this._repository, this._identityRepository)
-      : super(const OfflineChannelMutationState());
+  OfflineChannelController(
+    this._repository,
+    this._identityRepository,
+    this._tripSessionRepository,
+    this._tripContextService,
+  ) : super(const OfflineChannelMutationState());
 
   final OfflineChannelRepository _repository;
   final LocalIdentityRepository _identityRepository;
+  final TripSessionRepository _tripSessionRepository;
+  final TripContextService _tripContextService;
 
   Future<OfflineChannelModel?> createChannel({
     required UserModel? user,
@@ -105,8 +146,15 @@ class OfflineChannelController
               user: user,
               channelCode: channelCode,
             );
+      final identity = await _identityRepository.getCurrentIdentity();
+      if (identity != null) {
+        await _tripSessionRepository.activateOfflineChannelTrip(
+          channel: channel,
+          identity: identity,
+        );
+      }
       state = const OfflineChannelMutationState(
-        successMessage: 'Offline channel joined.',
+        successMessage: 'Offline channel joined and trip activated.',
       );
       return channel;
     } catch (error) {
@@ -118,7 +166,7 @@ class OfflineChannelController
   Future<void> setActiveChannel(String channelId) async {
     state = const OfflineChannelMutationState(isLoading: true);
     try {
-      await _repository.setActiveChannel(channelId);
+      await _tripContextService.switchActiveChannel(channelId);
       state = const OfflineChannelMutationState(
         successMessage: 'Active offline channel updated.',
       );
@@ -221,5 +269,7 @@ final offlineChannelControllerProvider = StateNotifierProvider<
   return OfflineChannelController(
     ref.read(offlineChannelRepositoryProvider),
     ref.read(localIdentityRepositoryProvider),
+    ref.read(tripSessionRepositoryProvider),
+    ref.read(tripContextServiceProvider),
   );
 });

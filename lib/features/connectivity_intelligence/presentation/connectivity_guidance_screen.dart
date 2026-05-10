@@ -21,7 +21,8 @@ class ConnectivityGuidanceScreen extends ConsumerWidget {
     final controller = ref.read(connectivityControllerProvider.notifier);
     final summary = state.summary;
     final modeState = ref.watch(modeControllerProvider);
-    final activeChannel = ref.watch(activeOfflineChannelProvider).asData?.value;
+    final activeChannel =
+        ref.watch(activeUsableOfflineChannelProvider).asData?.value;
 
     return Scaffold(
       appBar: AppBar(
@@ -55,6 +56,15 @@ class ConnectivityGuidanceScreen extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 12),
+              if (activeChannel != null) ...[
+                CompactStatusChip(
+                  label: activeChannel.channelCode,
+                  color: AppColors.offlinePurple,
+                  icon: Icons.hub_rounded,
+                  dense: true,
+                ),
+                const SizedBox(height: 12),
+              ],
               if (summary == null)
                 const Center(
                   child: Padding(

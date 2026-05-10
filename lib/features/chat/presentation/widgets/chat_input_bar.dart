@@ -45,81 +45,92 @@ class _ChatInputBarState extends State<ChatInputBar> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.07),
-              blurRadius: 18,
-              offset: const Offset(0, -6),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (widget.offlineHint != null) ...[
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 4, bottom: 7),
-                  child: Text(
-                    widget.offlineHint!,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AppColors.offlinePurple,
-                          fontWeight: FontWeight.w800,
-                        ),
-                  ),
-                ),
+    return Semantics(
+      label: 'cloud-chat-composer',
+      container: true,
+      child: SafeArea(
+        key: const ValueKey('cloud-chat-composer'),
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.07),
+                blurRadius: 18,
+                offset: const Offset(0, -6),
               ),
             ],
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (widget.isOnlineMediaAvailable) ...[
-                  IconButton(
-                    tooltip: 'Attach media',
-                    onPressed: _showAttachmentSheet,
-                    icon: const Icon(Icons.add_circle_outline_rounded),
-                  ),
-                  const SizedBox(width: 4),
-                ],
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    minLines: 1,
-                    maxLines: 5,
-                    maxLength: 2000,
-                    onChanged: (_) => setState(() {}),
-                    decoration: const InputDecoration(
-                      hintText: 'Message your group...',
-                      counterText: '',
-                      prefixIcon: Icon(Icons.chat_bubble_outline_rounded),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.offlineHint != null) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 7),
+                    child: Text(
+                      widget.offlineHint!,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: AppColors.offlinePurple,
+                            fontWeight: FontWeight.w800,
+                          ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                AnimatedScale(
-                  duration: const Duration(milliseconds: 140),
-                  scale: _controller.text.trim().isEmpty ? 0.92 : 1,
-                  child: IconButton.filled(
-                    tooltip: 'Send',
-                    style: IconButton.styleFrom(
-                      backgroundColor: AppColors.signalOrange,
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(50, 50),
-                    ),
-                    onPressed: _controller.text.trim().isEmpty ? null : _send,
-                    icon: const Icon(Icons.send_rounded),
                   ),
                 ),
               ],
-            ),
-          ],
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (widget.isOnlineMediaAvailable) ...[
+                    IconButton(
+                      tooltip: 'Attach media',
+                      onPressed: _showAttachmentSheet,
+                      icon: const Icon(Icons.add_circle_outline_rounded),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  Expanded(
+                    child: Semantics(
+                      label: 'cloud-chat-message-field',
+                      textField: true,
+                      child: TextField(
+                        key: const ValueKey('cloud-chat-message-field'),
+                        controller: _controller,
+                        minLines: 1,
+                        maxLines: 5,
+                        maxLength: 2000,
+                        onChanged: (_) => setState(() {}),
+                        decoration: const InputDecoration(
+                          hintText: 'Message your group...',
+                          counterText: '',
+                          prefixIcon: Icon(Icons.chat_bubble_outline_rounded),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  AnimatedScale(
+                    duration: const Duration(milliseconds: 140),
+                    scale: _controller.text.trim().isEmpty ? 0.92 : 1,
+                    child: IconButton.filled(
+                      key: const ValueKey('cloud-chat-send-button'),
+                      tooltip: 'Send',
+                      style: IconButton.styleFrom(
+                        backgroundColor: AppColors.signalOrange,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(50, 50),
+                      ),
+                      onPressed: _controller.text.trim().isEmpty ? null : _send,
+                      icon: const Icon(Icons.send_rounded),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -52,6 +52,9 @@ class ChatApi {
     required String filePath,
     required String fileName,
     String? content,
+    String? tripId,
+    String? channelId,
+    String? chatId,
     String? mimeType,
     int? durationMs,
     DateTime? createdAt,
@@ -61,6 +64,9 @@ class ChatApi {
       'messageType': messageType,
       if (content != null && content.trim().isNotEmpty)
         'content': content.trim(),
+      if (tripId != null) 'tripId': tripId,
+      if (channelId != null) 'channelId': channelId,
+      if (chatId != null) 'chatId': chatId,
       if (durationMs != null) 'durationMs': durationMs,
       if (createdAt != null) 'createdAt': createdAt.toIso8601String(),
       'file': await MultipartFile.fromFile(

@@ -163,7 +163,7 @@ class LocalIdentityRepository {
     if (identity == null) return null;
     final updated = identity.copyWith(
       cloudStatus: 'sync_failed',
-      syncState: 'failed',
+      syncState: 'needs_cloud_create',
       cloudErrorMessage: message,
     );
     await updateIdentity(updated);

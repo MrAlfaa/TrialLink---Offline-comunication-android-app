@@ -197,10 +197,53 @@ class TripSessionRepository {
       mode: 'offline',
       localIdentityId: localIdentityId,
       offlineChannelId: offlineChannelId,
+      activeChannelId: offlineChannelId,
       channelCode: normalizeChannelCode(channelCode),
       channelName: channelName,
     );
     return _insertAsActive(trip);
+  }
+
+  Future<TripSessionModel> activateOfflineChannelTrip({
+    required OfflineChannelModel channel,
+    required LocalIdentityModel identity,
+    String? tripName,
+  }) async {
+    await _offlineChannelRepository.setActiveChannel(channel.channelId);
+    final normalizedCode = normalizeChannelCode(channel.channelCode);
+    final db = await _database.database;
+    final rows = await db.query(
+      'trip_sessions',
+      where: 'mode IN (?, ?) AND (offline_channel_id = ? OR channel_code = ?)',
+      whereArgs: [
+        'offline',
+        'hybrid',
+        channel.channelId,
+        normalizedCode,
+      ],
+      orderBy: "CASE status WHEN 'active' THEN 0 ELSE 1 END, started_at DESC",
+      limit: 1,
+    );
+    if (rows.isNotEmpty) {
+      final existing = TripSessionModel.fromDb(rows.first);
+      await updateTripChannel(
+        tripId: existing.tripId,
+        offlineChannelId: channel.channelId,
+        channelCode: normalizedCode,
+      );
+      await setActiveTrip(existing.tripId);
+      return (await getActiveTrip()) ?? existing;
+    }
+
+    return createTripFromOfflineChannel(
+      tripName: (tripName?.trim().isNotEmpty ?? false)
+          ? tripName!.trim()
+          : channel.channelName,
+      offlineChannelId: channel.channelId,
+      channelCode: normalizedCode,
+      channelName: channel.channelName,
+      localIdentityId: identity.localUserId,
+    );
   }
 
   Future<TripSessionModel> createOnlineTripFromGroup({
@@ -232,6 +275,7 @@ class TripSessionRepository {
       cloudGroupId: group?.id,
       cloudGroupName: group?.groupName,
       offlineChannelId: channel.channelId,
+      activeChannelId: channel.channelId,
       channelCode: channel.channelCode,
       channelName: channel.channelName,
       syncState: syncState,
@@ -245,17 +289,22 @@ class TripSessionRepository {
     await db.transaction((txn) async {
       await txn.update(
         'trip_sessions',
-        {'status': 'archived', 'updated_at': now},
+        {'status': 'inactive', 'updated_at': now},
         where: 'status = ?',
         whereArgs: ['active'],
       );
       await txn.update(
         'trip_sessions',
-        {'status': 'active', 'updated_at': now},
+        {'status': 'active', 'last_opened_at': now, 'updated_at': now},
         where: 'trip_id = ?',
         whereArgs: [tripId],
       );
     });
+    final active = await getActiveTrip();
+    final channelId = active?.activeChannelId ?? active?.offlineChannelId;
+    if (channelId != null && channelId.isNotEmpty) {
+      await _activateTripChannel(tripId: tripId, channelId: channelId);
+    }
   }
 
   Future<void> completeTrip(String tripId) async {
@@ -276,6 +325,7 @@ class TripSessionRepository {
       'trip_sessions',
       {
         'offline_channel_id': offlineChannelId,
+        'active_channel_id': offlineChannelId,
         'channel_code': normalizeChannelCode(channelCode),
         'updated_at': DateTime.now().toIso8601String(),
       },
@@ -288,7 +338,7 @@ class TripSessionRepository {
     final db = await _database.database;
     await db.update(
       'trip_sessions',
-      {'status': 'archived', 'updated_at': DateTime.now().toIso8601String()},
+      {'status': 'inactive', 'updated_at': DateTime.now().toIso8601String()},
       where: 'status = ?',
       whereArgs: ['active'],
     );
@@ -311,6 +361,7 @@ class TripSessionRepository {
     String? cloudGroupId,
     String? cloudGroupName,
     String? offlineChannelId,
+    String? activeChannelId,
     String? channelCode,
     String? channelName,
     String syncState = 'local_only',
@@ -323,6 +374,7 @@ class TripSessionRepository {
       cloudGroupId: cloudGroupId,
       cloudGroupName: cloudGroupName,
       offlineChannelId: offlineChannelId,
+      activeChannelId: activeChannelId ?? offlineChannelId,
       channelCode: channelCode,
       channelName: channelName,
       localIdentityId: localIdentityId,
@@ -330,6 +382,7 @@ class TripSessionRepository {
       startedAt: now,
       syncState: syncState,
       createdAt: now,
+      lastOpenedAt: now,
       updatedAt: now,
     );
   }
@@ -340,7 +393,7 @@ class TripSessionRepository {
     await db.transaction((txn) async {
       await txn.update(
         'trip_sessions',
-        {'status': 'archived', 'updated_at': now},
+        {'status': 'inactive', 'updated_at': now},
         where: 'status = ?',
         whereArgs: ['active'],
       );
@@ -349,7 +402,24 @@ class TripSessionRepository {
         trip.toDbMap(),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
+      if ((trip.offlineChannelId ?? '').isNotEmpty) {
+        await txn.update('offline_channels', {'is_active': 0});
+        await txn.update(
+          'offline_channels',
+          {
+            'trip_id': trip.tripId,
+            'is_primary': 1,
+            'is_active': 1,
+            'channel_status': 'active',
+            'last_opened_at': now,
+            'updated_at': now,
+          },
+          where: 'channel_id = ?',
+          whereArgs: [trip.offlineChannelId],
+        );
+      }
     });
+    await _ensureDefaultChatForTrip(trip);
     return (await getActiveTrip()) ?? trip;
   }
 
@@ -368,6 +438,105 @@ class TripSessionRepository {
       },
       where: 'trip_id = ?',
       whereArgs: [tripId],
+    );
+    if (status == 'archived' || status == 'completed') {
+      final now = DateTime.now().toIso8601String();
+      await db.update(
+        'offline_channels',
+        {'is_active': 0, 'updated_at': now},
+        where: 'trip_id = ?',
+        whereArgs: [tripId],
+      );
+      await db.update(
+        'chat_rooms',
+        {'is_active': 0, 'updated_at': now},
+        where: 'trip_id = ?',
+        whereArgs: [tripId],
+      );
+    }
+  }
+
+  Future<void> _activateTripChannel({
+    required String tripId,
+    required String channelId,
+  }) async {
+    final db = await _database.database;
+    final now = DateTime.now().toIso8601String();
+    await db.transaction((txn) async {
+      await txn.update('offline_channels', {'is_active': 0});
+      await txn.update(
+        'offline_channels',
+        {
+          'trip_id': tripId,
+          'is_active': 1,
+          'channel_status': 'active',
+          'last_opened_at': now,
+          'updated_at': now,
+        },
+        where: 'channel_id = ?',
+        whereArgs: [channelId],
+      );
+      await txn.update(
+        'trip_sessions',
+        {
+          'active_channel_id': channelId,
+          'offline_channel_id': channelId,
+          'last_opened_at': now,
+          'updated_at': now,
+        },
+        where: 'trip_id = ?',
+        whereArgs: [tripId],
+      );
+      await txn.update(
+        'chat_rooms',
+        {'is_active': 0, 'updated_at': now},
+        where: 'trip_id = ?',
+        whereArgs: [tripId],
+      );
+      await txn.update(
+        'chat_rooms',
+        {'is_active': 1, 'updated_at': now},
+        where: 'trip_id = ? AND channel_id = ? AND is_default = 1',
+        whereArgs: [tripId, channelId],
+      );
+    });
+    await _database.upsertSetting('active_offline_channel_id', channelId);
+  }
+
+  Future<void> _ensureDefaultChatForTrip(TripSessionModel trip) async {
+    final db = await _database.database;
+    final channelId = trip.activeChannelId ?? trip.offlineChannelId;
+    final chatType = (channelId ?? '').isNotEmpty
+        ? 'offline_channel'
+        : (trip.cloudGroupId ?? '').isNotEmpty
+            ? 'cloud_group'
+            : 'trip_general';
+    final rows = await db.query(
+      'chat_rooms',
+      where:
+          'trip_id = ? AND COALESCE(channel_id, "") = ? AND chat_type = ? AND is_default = 1',
+      whereArgs: [trip.tripId, channelId ?? '', chatType],
+      limit: 1,
+    );
+    if (rows.isNotEmpty) return;
+    final now = DateTime.now().toIso8601String();
+    await db.insert(
+      'chat_rooms',
+      {
+        'chat_id':
+            'chat_${trip.tripId}_${channelId ?? trip.cloudGroupId ?? 'general'}',
+        'trip_id': trip.tripId,
+        'channel_id': channelId,
+        'cloud_group_id': trip.cloudGroupId,
+        'chat_name': 'General',
+        'chat_type': chatType,
+        'is_default': 1,
+        'is_active': 1,
+        'chat_status': 'active',
+        'created_at': now,
+        'updated_at': now,
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
     );
   }
 

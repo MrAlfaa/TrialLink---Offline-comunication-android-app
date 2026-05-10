@@ -3,6 +3,9 @@ class ChatMessageModel {
     required this.localId,
     required this.clientMessageId,
     required this.groupId,
+    this.tripId,
+    this.channelId,
+    this.chatId,
     required this.senderId,
     required this.senderName,
     required this.messageType,
@@ -34,6 +37,9 @@ class ChatMessageModel {
   final String? serverId;
   final String clientMessageId;
   final String groupId;
+  final String? tripId;
+  final String? channelId;
+  final String? chatId;
   final String? offlineChannelId;
   final String chatContextType;
   final String senderId;
@@ -69,6 +75,9 @@ class ChatMessageModel {
     String? serverId,
     String? clientMessageId,
     String? groupId,
+    String? tripId,
+    String? channelId,
+    String? chatId,
     String? offlineChannelId,
     String? chatContextType,
     String? senderId,
@@ -99,6 +108,9 @@ class ChatMessageModel {
       serverId: serverId ?? this.serverId,
       clientMessageId: clientMessageId ?? this.clientMessageId,
       groupId: groupId ?? this.groupId,
+      tripId: tripId ?? this.tripId,
+      channelId: channelId ?? this.channelId,
+      chatId: chatId ?? this.chatId,
       offlineChannelId: offlineChannelId ?? this.offlineChannelId,
       chatContextType: chatContextType ?? this.chatContextType,
       senderId: senderId ?? this.senderId,
@@ -140,6 +152,9 @@ class ChatMessageModel {
       serverId: json['id']?.toString(),
       clientMessageId: clientMessageId,
       groupId: json['groupId']?.toString() ?? '',
+      tripId: json['tripId']?.toString(),
+      channelId: json['channelId']?.toString(),
+      chatId: json['chatId']?.toString(),
       offlineChannelId: json['offlineChannelId']?.toString(),
       chatContextType: json['chatContextType']?.toString() ?? 'cloud_group',
       senderId: senderId,
@@ -173,6 +188,9 @@ class ChatMessageModel {
       serverId: row['server_id']?.toString(),
       clientMessageId: row['client_message_id'].toString(),
       groupId: row['group_id'].toString(),
+      tripId: row['trip_id']?.toString(),
+      channelId: row['channel_id']?.toString(),
+      chatId: row['chat_id']?.toString(),
       offlineChannelId: row['offline_channel_id']?.toString(),
       chatContextType: row['chat_context_type']?.toString() ?? 'cloud_group',
       senderId: row['sender_id'].toString(),
@@ -210,6 +228,9 @@ class ChatMessageModel {
       'server_id': serverId,
       'client_message_id': clientMessageId,
       'group_id': groupId,
+      'trip_id': tripId,
+      'channel_id': channelId,
+      'chat_id': chatId,
       'offline_channel_id': offlineChannelId,
       'chat_context_type': chatContextType,
       'sender_id': senderId,
@@ -241,6 +262,9 @@ class ChatMessageModel {
   Map<String, dynamic> toSyncJson() {
     return {
       'clientMessageId': clientMessageId,
+      if (tripId != null) 'tripId': tripId,
+      if (channelId != null) 'channelId': channelId,
+      if (chatId != null) 'chatId': chatId,
       'content': content,
       'messageType': messageType,
       'createdAt': createdAt.toIso8601String(),

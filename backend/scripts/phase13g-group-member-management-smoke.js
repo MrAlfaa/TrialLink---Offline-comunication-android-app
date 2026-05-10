@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 
-const apiBaseUrl = process.env.API_BASE_URL || 'http://localhost:5000/api';
+const apiBaseUrl = process.env.API_BASE_URL || 'http://localhost:5001/api';
 const stamp = Date.now();
 
 async function request(method, path, body, token) {

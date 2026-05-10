@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { io } = require('socket.io-client');
 
-const apiBaseUrl = process.env.API_BASE_URL || 'http://localhost:5000/api';
+const apiBaseUrl = process.env.API_BASE_URL || 'http://localhost:5001/api';
 const socketBaseUrl = apiBaseUrl.replace(/\/api\/?$/, '');
 const stamp = Date.now();
 

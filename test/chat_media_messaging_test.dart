@@ -138,10 +138,20 @@ void main() {
     final chatSource = File('lib/features/chat/presentation/chat_screen.dart')
         .readAsStringSync();
 
-    expect(dbSource, contains('version: 19'));
+    expect(dbSource, contains('version: 20'));
     expect(dbSource, contains('local_file_path'));
     expect(dbSource, contains('upload_status'));
     expect(chatSource, contains('state.isOnline &&'));
     expect(chatSource, contains('ChatInputBar'));
+  });
+
+  test('cloud chat screen reserves shell bottom nav space for composer', () {
+    final chatSource = File('lib/features/chat/presentation/chat_screen.dart')
+        .readAsStringSync();
+
+    expect(chatSource, contains('body: SafeArea('));
+    expect(chatSource, contains('bottom: false'));
+    expect(chatSource, contains('ChatInputBar('));
+    expect(chatSource, isNot(contains('bottomNavigationBar')));
   });
 }

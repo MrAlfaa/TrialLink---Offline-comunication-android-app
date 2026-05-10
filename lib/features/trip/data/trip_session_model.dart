@@ -7,6 +7,7 @@ class TripSessionModel {
     this.cloudGroupId,
     this.cloudGroupName,
     this.offlineChannelId,
+    this.activeChannelId,
     this.channelCode,
     this.channelName,
     required this.localIdentityId,
@@ -15,6 +16,7 @@ class TripSessionModel {
     this.endedAt,
     required this.syncState,
     required this.createdAt,
+    this.lastOpenedAt,
     this.updatedAt,
   });
 
@@ -25,6 +27,7 @@ class TripSessionModel {
   final String? cloudGroupId;
   final String? cloudGroupName;
   final String? offlineChannelId;
+  final String? activeChannelId;
   final String? channelCode;
   final String? channelName;
   final String localIdentityId;
@@ -33,6 +36,7 @@ class TripSessionModel {
   final DateTime? endedAt;
   final String syncState;
   final DateTime createdAt;
+  final DateTime? lastOpenedAt;
   final DateTime? updatedAt;
 
   bool get isActive => status == 'active';
@@ -48,6 +52,8 @@ class TripSessionModel {
       cloudGroupId: row['cloud_group_id']?.toString(),
       cloudGroupName: row['cloud_group_name']?.toString(),
       offlineChannelId: row['offline_channel_id']?.toString(),
+      activeChannelId: row['active_channel_id']?.toString() ??
+          row['offline_channel_id']?.toString(),
       channelCode: row['channel_code']?.toString(),
       channelName: row['channel_name']?.toString(),
       localIdentityId: row['local_identity_id'].toString(),
@@ -58,6 +64,7 @@ class TripSessionModel {
       syncState: row['sync_state'].toString(),
       createdAt: DateTime.tryParse(row['created_at']?.toString() ?? '') ??
           DateTime.now(),
+      lastOpenedAt: DateTime.tryParse(row['last_opened_at']?.toString() ?? ''),
       updatedAt: DateTime.tryParse(row['updated_at']?.toString() ?? ''),
     );
   }
@@ -71,6 +78,7 @@ class TripSessionModel {
       'cloud_group_id': cloudGroupId,
       'cloud_group_name': cloudGroupName,
       'offline_channel_id': offlineChannelId,
+      'active_channel_id': activeChannelId ?? offlineChannelId,
       'channel_code': channelCode,
       'channel_name': channelName,
       'local_identity_id': localIdentityId,
@@ -79,6 +87,7 @@ class TripSessionModel {
       'ended_at': endedAt?.toIso8601String(),
       'sync_state': syncState,
       'created_at': createdAt.toIso8601String(),
+      'last_opened_at': lastOpenedAt?.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
     };
   }

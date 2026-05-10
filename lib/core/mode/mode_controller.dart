@@ -47,6 +47,9 @@ final modeControllerProvider =
       }
       return result;
     },
+    clearCloudSetupOverlay: () {
+      ref.read(cloudSyncControllerProvider.notifier).clear();
+    },
   );
 
   ref.listen(connectionModeProvider, (_, next) {
@@ -79,12 +82,14 @@ class ModeController extends StateNotifier<ModeState> {
     required EmergencyRepository emergencyRepository,
     required LocationSyncService locationSyncService,
     Future<CloudBootstrapResult> Function()? ensureCloudReadyBeforeOnlineMode,
+    void Function()? clearCloudSetupOverlay,
   })  : _settings = settings,
         _socketService = socketService,
         _messageSyncService = messageSyncService,
         _emergencyRepository = emergencyRepository,
         _locationSyncService = locationSyncService,
         _ensureCloudReadyBeforeOnlineMode = ensureCloudReadyBeforeOnlineMode,
+        _clearCloudSetupOverlay = clearCloudSetupOverlay,
         super(ModeState.initial());
 
   final SettingsService _settings;
@@ -94,8 +99,10 @@ class ModeController extends StateNotifier<ModeState> {
   final LocationSyncService _locationSyncService;
   final Future<CloudBootstrapResult> Function()?
       _ensureCloudReadyBeforeOnlineMode;
+  final void Function()? _clearCloudSetupOverlay;
   AuthAccessState _authAccessState = AuthAccessState.unauthenticated;
   UserModel? _user;
+  bool _autoCloudBootstrapFailed = false;
 
   Future<void> initializeMode({
     ConnectionModeState? connection,
@@ -165,6 +172,7 @@ class ModeController extends StateNotifier<ModeState> {
   }
 
   Future<void> setUserMode(UserMode mode) async {
+    _autoCloudBootstrapFailed = false;
     state = state.copyWith(
       userMode: mode,
       modeControlType:
@@ -180,6 +188,7 @@ class ModeController extends StateNotifier<ModeState> {
   }
 
   Future<void> setModeControlType(ModeControlType type) async {
+    _autoCloudBootstrapFailed = false;
     state = state.copyWith(
       modeControlType: type,
       userMode: type == ModeControlType.auto
@@ -191,6 +200,7 @@ class ModeController extends StateNotifier<ModeState> {
   }
 
   Future<void> setManualCommunicationMode(ManualCommunicationMode mode) async {
+    _autoCloudBootstrapFailed = false;
     state = state.copyWith(
       modeControlType: ModeControlType.manual,
       manualCommunicationMode: mode,
@@ -231,6 +241,9 @@ class ModeController extends StateNotifier<ModeState> {
   }
 
   EffectiveMode calculateEffectiveMode() {
+    if (state.userMode == UserMode.auto && _autoCloudBootstrapFailed) {
+      return EffectiveMode.offline;
+    }
     return _calculateEffectiveMode(state.userMode, state.connectionState);
   }
 
@@ -262,12 +275,14 @@ class ModeController extends StateNotifier<ModeState> {
   void _recalculate({bool runSync = true}) {
     final previousEffectiveMode = state.effectiveMode;
     final effectiveMode = calculateEffectiveMode();
-    final warning = getModeWarningMessageFor(
-      userMode: state.userMode,
-      connectionState: state.connectionState,
-      effectiveMode: effectiveMode,
-      backendReachable: state.backendReachable,
-    );
+    final warning = _autoCloudBootstrapFailed
+        ? 'Cloud setup failed. Offline Mode is available. TrailLink will retry cloud setup when the server is reachable.'
+        : getModeWarningMessageFor(
+            userMode: state.userMode,
+            connectionState: state.connectionState,
+            effectiveMode: effectiveMode,
+            backendReachable: state.backendReachable,
+          );
     state = state.copyWith(
       effectiveMode: effectiveMode,
       socketConnected: _socketService.isConnected,
@@ -289,7 +304,15 @@ class ModeController extends StateNotifier<ModeState> {
     if (_authAccessState != AuthAccessState.authenticatedOnline &&
         ensureCloudReady != null) {
       final result = await ensureCloudReady();
-      if (!result.success) return;
+      if (!result.success) {
+        if (state.userMode == UserMode.auto) {
+          _autoCloudBootstrapFailed = true;
+          _clearCloudSetupOverlay?.call();
+          _recalculate(runSync: false);
+        }
+        return;
+      }
+      _autoCloudBootstrapFailed = false;
       if (result.user != null) {
         _authAccessState = AuthAccessState.authenticatedOnline;
         _user = result.user;

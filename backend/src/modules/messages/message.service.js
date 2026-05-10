@@ -8,6 +8,9 @@ const toMessageDto = (message) => {
     id: message._id.toString(),
     clientMessageId: message.clientMessageId,
     groupId: message.groupId?.toString?.() || message.groupId,
+    tripId: message.tripId || null,
+    channelId: message.channelId || null,
+    chatId: message.chatId || null,
     sender: {
       id: sender?._id?.toString?.() || sender?.toString?.() || message.senderId.toString(),
       fullName: sender?.fullName || 'TrailLink User',
@@ -55,6 +58,12 @@ const bridgeFieldsFrom = (item = {}, userId) => {
   };
 };
 
+const contextFieldsFrom = (item = {}) => ({
+  tripId: item.tripId || undefined,
+  channelId: item.channelId || undefined,
+  chatId: item.chatId || undefined,
+});
+
 const getMessages = async ({ groupId, userId, page = 1, limit = 30, before }) => {
   await ensureUserActiveGroupMember(userId, groupId);
 
@@ -93,6 +102,7 @@ const createOrFindMessage = async ({
   content,
   messageType = 'text',
   createdAt,
+  contextMetadata = {},
   bridgeMetadata = {},
   media = {},
 }) => {
@@ -115,6 +125,7 @@ const createOrFindMessage = async ({
     messageType,
     content: (content || '').trim(),
     status: 'sent',
+    ...contextMetadata,
     ...media,
     ...bridgeMetadata,
     ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
@@ -169,7 +180,17 @@ const validateMediaInput = ({ messageType, body, file }) => {
   return { durationMs };
 };
 
-const saveSocketMessage = async ({ groupId, userId, clientMessageId, content, messageType, createdAt }) => {
+const saveSocketMessage = async ({
+  groupId,
+  userId,
+  clientMessageId,
+  content,
+  messageType,
+  createdAt,
+  tripId,
+  channelId,
+  chatId,
+}) => {
   await ensureUserActiveGroupMember(userId, groupId);
 
   if (messageType && messageType !== 'text') {
@@ -197,6 +218,7 @@ const saveSocketMessage = async ({ groupId, userId, clientMessageId, content, me
     content,
     messageType,
     createdAt,
+    contextMetadata: contextFieldsFrom({ tripId, channelId, chatId }),
   });
 
   return {
@@ -216,6 +238,7 @@ const saveMediaMessage = async ({ groupId, userId, body, file }) => {
     content: body.content || (messageType === 'image' ? 'Image' : 'Voice note'),
     messageType,
     createdAt: body.createdAt,
+    contextMetadata: contextFieldsFrom(body),
     media: {
       mediaUrl: `/uploads/chat-media/${file.filename}`,
       fileName: file.originalname || file.filename,
@@ -245,6 +268,7 @@ const syncMessages = async ({ groupId, userId, messages }) => {
       content: item.content,
       messageType: item.messageType || 'text',
       createdAt: item.createdAt,
+      contextMetadata: contextFieldsFrom(item),
       bridgeMetadata: bridgeFieldsFrom(item, userId),
     });
 
@@ -265,6 +289,7 @@ const syncMessages = async ({ groupId, userId, messages }) => {
 
 module.exports = {
   bridgeFieldsFrom,
+  contextFieldsFrom,
   getMessages,
   saveSocketMessage,
   saveMediaMessage,

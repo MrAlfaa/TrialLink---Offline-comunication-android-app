@@ -5,9 +5,11 @@ class OfflineChannelModel {
     required this.channelName,
     required this.createdByUserId,
     required this.createdAt,
+    this.tripId,
     this.description,
     this.createdByName,
     this.channelKeyHash,
+    this.isPrimary = false,
     this.isActive = false,
     this.channelStatus = 'active',
     this.endedAt,
@@ -20,10 +22,12 @@ class OfflineChannelModel {
   final String channelId;
   final String channelCode;
   final String channelName;
+  final String? tripId;
   final String? description;
   final String createdByUserId;
   final String? createdByName;
   final String? channelKeyHash;
+  final bool isPrimary;
   final bool isActive;
   final String channelStatus;
   final DateTime? endedAt;
@@ -41,10 +45,12 @@ class OfflineChannelModel {
       channelId: row['channel_id'].toString(),
       channelCode: row['channel_code'].toString(),
       channelName: row['channel_name'].toString(),
+      tripId: row['trip_id']?.toString(),
       description: row['description']?.toString(),
       createdByUserId: row['created_by_user_id'].toString(),
       createdByName: row['created_by_name']?.toString(),
       channelKeyHash: row['channel_key_hash']?.toString(),
+      isPrimary: row['is_primary'] == 1,
       isActive: row['is_active'] == 1,
       channelStatus: row['channel_status']?.toString() ?? 'active',
       endedAt: DateTime.tryParse(row['ended_at']?.toString() ?? ''),
@@ -62,10 +68,12 @@ class OfflineChannelModel {
       'channel_id': channelId,
       'channel_code': channelCode,
       'channel_name': channelName,
+      'trip_id': tripId,
       'description': description,
       'created_by_user_id': createdByUserId,
       'created_by_name': createdByName,
       'channel_key_hash': channelKeyHash,
+      'is_primary': isPrimary ? 1 : 0,
       'is_active': isActive ? 1 : 0,
       'channel_status': channelStatus,
       'ended_at': endedAt?.toIso8601String(),
@@ -78,6 +86,9 @@ class OfflineChannelModel {
   }
 
   OfflineChannelModel copyWith({
+    String? tripId,
+    bool clearTripId = false,
+    bool? isPrimary,
     bool? isActive,
     String? channelStatus,
     DateTime? endedAt,
@@ -92,9 +103,11 @@ class OfflineChannelModel {
       channelName: channelName,
       createdByUserId: createdByUserId,
       createdAt: createdAt,
+      tripId: clearTripId ? null : tripId ?? this.tripId,
       description: description,
       createdByName: createdByName,
       channelKeyHash: channelKeyHash,
+      isPrimary: isPrimary ?? this.isPrimary,
       isActive: isActive ?? this.isActive,
       channelStatus: channelStatus ?? this.channelStatus,
       endedAt: endedAt ?? this.endedAt,

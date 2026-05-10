@@ -41,6 +41,7 @@ class OfflineChatRepository {
     required OfflineChannelModel channel,
     required CurrentUserActor actor,
     required String content,
+    String? chatId,
   }) async {
     if (!channel.isUsable) {
       throw StateError('This channel has ended. Chat history is read-only.');
@@ -49,12 +50,14 @@ class OfflineChatRepository {
       channel: channel,
       actor: actor,
       content: content,
+      chatId: chatId,
     );
     final message = OfflineTextMessageModel(
       messageId: packet.messageId!,
       packetId: packet.packetId,
       channelId: channel.channelId,
       channelCode: channel.channelCode,
+      chatId: chatId,
       senderId: actor.localUserId,
       senderName: actor.displayName,
       content: content,
@@ -222,6 +225,7 @@ class OfflineChatRepository {
           packetId: packet.packetId,
           channelId: packet.channelId,
           channelCode: packet.channelCode,
+          chatId: packet.chatId,
           senderId: packet.senderId,
           senderName: packet.senderName,
           content: packet.content!,

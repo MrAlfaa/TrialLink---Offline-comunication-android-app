@@ -36,6 +36,9 @@ const syncMessagesValidation = [
     .optional()
     .isISO8601()
     .withMessage('Message createdAt must be a valid ISO date'),
+  body('messages.*.tripId').optional().trim().isLength({ max: 120 }),
+  body('messages.*.channelId').optional().trim().isLength({ max: 120 }),
+  body('messages.*.chatId').optional().trim().isLength({ max: 120 }),
 ];
 
 const mediaMessageValidation = [
@@ -60,6 +63,9 @@ const mediaMessageValidation = [
     .optional()
     .isISO8601()
     .withMessage('Message createdAt must be a valid ISO date'),
+  body('tripId').optional().trim().isLength({ max: 120 }),
+  body('channelId').optional().trim().isLength({ max: 120 }),
+  body('chatId').optional().trim().isLength({ max: 120 }),
 ];
 
 const validate = (req, res, next) => {

@@ -39,7 +39,7 @@ class LocalDatabase {
 
     _database = await openDatabase(
       dbPath,
-      version: 19,
+      version: 20,
       onCreate: (db, version) async {
         await _createPhaseOneTables(db);
         await _createPhaseTwoTables(db);
@@ -60,6 +60,7 @@ class LocalDatabase {
         await _createPhaseSeventeenTables(db);
         await _createPhaseEighteenTables(db);
         await _createPhaseNineteenTables(db);
+        await _createPhaseTwentyTables(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -115,6 +116,9 @@ class LocalDatabase {
         }
         if (oldVersion < 19) {
           await _createPhaseNineteenTables(db);
+        }
+        if (oldVersion < 20) {
+          await _createPhaseTwentyTables(db);
         }
       },
     );
@@ -1186,6 +1190,202 @@ class LocalDatabase {
     ''');
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_offline_channels_status ON offline_channels(channel_status, is_active)',
+    );
+  }
+
+  Future<void> _createPhaseTwentyTables(Database db) async {
+    await _addColumnIfMissing(
+      db,
+      tableName: 'trip_sessions',
+      columnName: 'active_channel_id',
+      definition: 'TEXT',
+    );
+    await _addColumnIfMissing(
+      db,
+      tableName: 'trip_sessions',
+      columnName: 'last_opened_at',
+      definition: 'TEXT',
+    );
+    await _addColumnIfMissing(
+      db,
+      tableName: 'offline_channels',
+      columnName: 'trip_id',
+      definition: 'TEXT',
+    );
+    await _addColumnIfMissing(
+      db,
+      tableName: 'offline_channels',
+      columnName: 'is_primary',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
+    );
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS chat_rooms (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id TEXT NOT NULL UNIQUE,
+        trip_id TEXT NOT NULL,
+        channel_id TEXT,
+        cloud_group_id TEXT,
+        chat_name TEXT NOT NULL,
+        chat_type TEXT NOT NULL,
+        is_default INTEGER NOT NULL DEFAULT 0,
+        is_active INTEGER NOT NULL DEFAULT 0,
+        chat_status TEXT NOT NULL DEFAULT 'active',
+        created_at TEXT NOT NULL,
+        updated_at TEXT
+      )
+    ''');
+
+    for (final tableName in [
+      'offline_messages',
+      'offline_packet_queue',
+      'processed_offline_packets',
+      'offline_acks',
+      'local_messages',
+      'message_queue',
+    ]) {
+      await _addColumnIfMissing(
+        db,
+        tableName: tableName,
+        columnName: 'chat_id',
+        definition: 'TEXT',
+      );
+    }
+    for (final tableName in ['local_messages', 'message_queue']) {
+      await _addColumnIfMissing(
+        db,
+        tableName: tableName,
+        columnName: 'trip_id',
+        definition: 'TEXT',
+      );
+      await _addColumnIfMissing(
+        db,
+        tableName: tableName,
+        columnName: 'channel_id',
+        definition: 'TEXT',
+      );
+    }
+
+    final now = DateTime.now().toIso8601String();
+    await db.execute('''
+      UPDATE trip_sessions
+      SET active_channel_id = COALESCE(active_channel_id, offline_channel_id),
+          last_opened_at = COALESCE(last_opened_at, updated_at, started_at, created_at, '$now')
+      WHERE active_channel_id IS NULL OR active_channel_id = ''
+         OR last_opened_at IS NULL OR last_opened_at = ''
+    ''');
+    await db.execute('''
+      UPDATE trip_sessions
+      SET status = 'inactive'
+      WHERE status NOT IN ('active', 'inactive', 'archived', 'completed')
+    ''');
+    await db.execute('''
+      UPDATE trip_sessions
+      SET status = 'inactive'
+      WHERE status = 'active'
+        AND trip_id NOT IN (
+          SELECT trip_id FROM trip_sessions
+          WHERE status = 'active'
+          ORDER BY COALESCE(last_opened_at, started_at, created_at) DESC
+          LIMIT 1
+        )
+    ''');
+
+    final tripRows = await db.query('trip_sessions');
+    for (final trip in tripRows) {
+      final tripId = trip['trip_id']?.toString();
+      if (tripId == null || tripId.isEmpty) continue;
+      final channelId =
+          (trip['active_channel_id'] ?? trip['offline_channel_id'])?.toString();
+      final channelCode = trip['channel_code']?.toString();
+      final cloudGroupId = trip['cloud_group_id']?.toString();
+
+      if (channelId != null && channelId.isNotEmpty) {
+        await db.update(
+          'offline_channels',
+          {
+            'trip_id': tripId,
+            'is_primary': 1,
+            'updated_at': now,
+          },
+          where: 'channel_id = ? OR channel_code = ?',
+          whereArgs: [channelId, channelCode],
+        );
+        await _insertDefaultChatIfMissing(
+          db: db,
+          tripId: tripId,
+          channelId: channelId,
+          cloudGroupId: cloudGroupId,
+          chatType: 'offline_channel',
+          now: now,
+        );
+      } else if (cloudGroupId != null && cloudGroupId.isNotEmpty) {
+        await _insertDefaultChatIfMissing(
+          db: db,
+          tripId: tripId,
+          channelId: null,
+          cloudGroupId: cloudGroupId,
+          chatType: 'cloud_group',
+          now: now,
+        );
+      } else {
+        await _insertDefaultChatIfMissing(
+          db: db,
+          tripId: tripId,
+          channelId: null,
+          cloudGroupId: null,
+          chatType: 'trip_general',
+          now: now,
+        );
+      }
+    }
+
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_trip_sessions_active ON trip_sessions(status, last_opened_at)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_offline_channels_trip ON offline_channels(trip_id, is_primary, is_active)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_chat_rooms_trip ON chat_rooms(trip_id, is_default, is_active)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_chat_rooms_channel ON chat_rooms(channel_id, is_default, is_active)',
+    );
+  }
+
+  Future<void> _insertDefaultChatIfMissing({
+    required Database db,
+    required String tripId,
+    required String? channelId,
+    required String? cloudGroupId,
+    required String chatType,
+    required String now,
+  }) async {
+    final existing = await db.query(
+      'chat_rooms',
+      where:
+          'trip_id = ? AND COALESCE(channel_id, "") = ? AND chat_type = ? AND is_default = 1',
+      whereArgs: [tripId, channelId ?? '', chatType],
+      limit: 1,
+    );
+    if (existing.isNotEmpty) return;
+    await db.insert(
+      'chat_rooms',
+      {
+        'chat_id': 'chat_${tripId}_${channelId ?? cloudGroupId ?? 'general'}',
+        'trip_id': tripId,
+        'channel_id': channelId,
+        'cloud_group_id': cloudGroupId,
+        'chat_name': 'General',
+        'chat_type': chatType,
+        'is_default': 1,
+        'is_active': 1,
+        'chat_status': 'active',
+        'created_at': now,
+        'updated_at': now,
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
     );
   }
 

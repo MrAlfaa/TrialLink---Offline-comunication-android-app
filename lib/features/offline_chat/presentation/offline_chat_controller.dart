@@ -13,21 +13,24 @@ class OfflineChatArgs {
   const OfflineChatArgs({
     required this.channel,
     required this.actor,
+    this.chatId,
   });
 
   final OfflineChannelModel channel;
   final CurrentUserActor actor;
+  final String? chatId;
   CurrentUserActor get user => actor;
 
   @override
   bool operator ==(Object other) {
     return other is OfflineChatArgs &&
         other.channel.channelId == channel.channelId &&
+        other.chatId == chatId &&
         other.actor.localUserId == actor.localUserId;
   }
 
   @override
-  int get hashCode => Object.hash(channel.channelId, actor.localUserId);
+  int get hashCode => Object.hash(channel.channelId, actor.localUserId, chatId);
 }
 
 class OfflineChatState {
@@ -124,6 +127,7 @@ class OfflineChatController extends StateNotifier<OfflineChatState> {
         channel: args.channel,
         actor: args.actor,
         content: trimmed,
+        chatId: args.chatId,
       );
       state = state.copyWith(messages: [...state.messages, message]);
       await _repository.sendMessagePacket(

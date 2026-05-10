@@ -20,21 +20,31 @@ class ChatSessionArgs {
     required this.groupId,
     required this.groupName,
     required this.currentUser,
+    this.tripId,
+    this.channelId,
+    this.chatId,
   });
 
   final String groupId;
   final String groupName;
   final UserModel currentUser;
+  final String? tripId;
+  final String? channelId;
+  final String? chatId;
 
   @override
   bool operator ==(Object other) {
     return other is ChatSessionArgs &&
         other.groupId == groupId &&
+        other.tripId == tripId &&
+        other.channelId == channelId &&
+        other.chatId == chatId &&
         other.currentUser.id == currentUser.id;
   }
 
   @override
-  int get hashCode => Object.hash(groupId, currentUser.id);
+  int get hashCode =>
+      Object.hash(groupId, currentUser.id, tripId, channelId, chatId);
 }
 
 class ChatState {
@@ -133,6 +143,9 @@ class ChatController extends StateNotifier<ChatState> {
 
     final message = await _repository.createLocalOutgoingMessage(
       groupId: args.groupId,
+      tripId: args.tripId,
+      channelId: args.channelId,
+      chatId: args.chatId,
       currentUser: args.currentUser,
       content: trimmed,
     );
@@ -161,6 +174,9 @@ class ChatController extends StateNotifier<ChatState> {
         SendMessageRequest(
           clientMessageId: message.clientMessageId,
           groupId: args.groupId,
+          tripId: args.tripId,
+          channelId: args.channelId,
+          chatId: args.chatId,
           content: message.content,
           createdAt: message.createdAt,
         ),
@@ -192,6 +208,9 @@ class ChatController extends StateNotifier<ChatState> {
         SendMessageRequest(
           clientMessageId: message.clientMessageId,
           groupId: message.groupId,
+          tripId: message.tripId,
+          channelId: message.channelId,
+          chatId: message.chatId,
           content: message.content,
           createdAt: message.createdAt,
         ),
@@ -212,6 +231,9 @@ class ChatController extends StateNotifier<ChatState> {
     try {
       final message = await _repository.createLocalImageMessage(
         groupId: args.groupId,
+        tripId: args.tripId,
+        channelId: args.channelId,
+        chatId: args.chatId,
         currentUser: args.currentUser,
       );
       if (message == null) return;
@@ -243,6 +265,9 @@ class ChatController extends StateNotifier<ChatState> {
     try {
       final message = await _repository.stopAndCreateLocalVoiceMessage(
         groupId: args.groupId,
+        tripId: args.tripId,
+        channelId: args.channelId,
+        chatId: args.chatId,
         currentUser: args.currentUser,
       );
       if (message == null) return;

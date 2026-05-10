@@ -54,8 +54,7 @@ class CloudSyncController extends StateNotifier<CloudSyncState> {
     final result = await _service.ensureCloudReadyBeforeOnlineMode();
     if (!result.success) {
       state = CloudSyncState.error(
-        result.errorMessage ??
-            'Cloud account creation failed. You can continue in Offline Mode.',
+        result.errorMessage ?? 'Cloud account creation failed.',
         emailConflict: result.emailConflict,
       );
       return result;

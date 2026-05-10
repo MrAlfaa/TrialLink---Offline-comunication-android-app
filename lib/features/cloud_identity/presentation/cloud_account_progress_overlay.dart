@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/identity/auth_access_controller.dart';
+import '../../../core/mode/mode_controller.dart';
+import '../../setup/data/setup_cloud_failure_recovery_service.dart';
 import '../data/cloud_sync_controller.dart';
 import '../data/cloud_identity_status_model.dart';
 
@@ -34,6 +38,19 @@ class _BlockingCloudOverlay extends ConsumerWidget {
   const _BlockingCloudOverlay({required this.state});
 
   final CloudSyncState state;
+
+  Future<void> _continueOffline(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    await ref
+        .read(setupCloudFailureRecoveryServiceProvider)
+        .continueOfflineAfterCloudFailure();
+    await ref.read(modeControllerProvider.notifier).loadModeSettings();
+    await ref.read(authAccessControllerProvider.notifier).refreshFromIdentity();
+    ref.read(cloudSyncControllerProvider.notifier).clear();
+    if (context.mounted) context.go('/home');
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -98,17 +115,22 @@ class _BlockingCloudOverlay extends ConsumerWidget {
                     ),
                   ] else ...[
                     Text(
-                      state.errorMessage!,
+                      'Your local TrailLink profile is saved. You can continue in Offline Mode and connect your cloud profile later.',
                       style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Details: ${state.errorMessage!}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppColors.mutedText,
+                          ),
                     ),
                     const SizedBox(height: 18),
                     Row(
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () => ref
-                                .read(cloudSyncControllerProvider.notifier)
-                                .clear(),
+                            onPressed: () => _continueOffline(context, ref),
                             child: const Text('Continue Offline'),
                           ),
                         ),
@@ -121,7 +143,7 @@ class _BlockingCloudOverlay extends ConsumerWidget {
                             child: Text(
                               state.emailConflict
                                   ? 'Try another email'
-                                  : 'Retry',
+                                  : 'Retry Cloud Setup',
                             ),
                           ),
                         ),

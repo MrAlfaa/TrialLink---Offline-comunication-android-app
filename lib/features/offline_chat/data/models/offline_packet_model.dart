@@ -13,6 +13,7 @@ class OfflinePacketModel {
     required this.payload,
     required this.createdAt,
     this.tripId,
+    this.chatId,
     this.senderLocalId,
     this.senderBackendId,
     this.identityType = 'authenticated_cached',
@@ -29,6 +30,7 @@ class OfflinePacketModel {
   final String channelCode;
   final String senderId;
   final String? tripId;
+  final String? chatId;
   final String? senderLocalId;
   final String? senderBackendId;
   final String senderName;
@@ -73,6 +75,8 @@ class OfflinePacketModel {
               .toString(),
       senderName: data['senderName']?.toString() ?? 'TrailLink User',
       tripId: data['tripId']?.toString(),
+      chatId:
+          data['chatId']?.toString() ?? data['payload']?['chatId']?.toString(),
       senderLocalId:
           data['senderLocalId']?.toString() ?? data['senderId']?.toString(),
       senderBackendId: data['senderBackendId']?.toString(),
@@ -99,6 +103,7 @@ class OfflinePacketModel {
       senderId: senderId,
       senderName: senderName,
       tripId: tripId,
+      chatId: chatId,
       senderLocalId: senderLocalId,
       senderBackendId: senderBackendId,
       identityType: identityType,
@@ -122,6 +127,7 @@ class OfflinePacketModel {
       'channelCode': channelCode,
       'senderId': senderId,
       'tripId': tripId,
+      'chatId': chatId,
       'senderLocalId': senderLocalId ?? senderId,
       if (senderBackendId != null) 'senderBackendId': senderBackendId,
       'senderName': senderName,

@@ -43,6 +43,9 @@ class ChatRepository {
 
   Future<ChatMessageModel> createLocalOutgoingMessage({
     required String groupId,
+    String? tripId,
+    String? channelId,
+    String? chatId,
     required UserModel currentUser,
     required String content,
   }) async {
@@ -51,6 +54,9 @@ class ChatRepository {
       localId: _uuid.v4(),
       clientMessageId: _uuid.v4(),
       groupId: groupId,
+      tripId: tripId,
+      channelId: channelId,
+      chatId: chatId,
       senderId: currentUser.id,
       senderName: currentUser.fullName,
       messageType: 'text',
@@ -69,12 +75,18 @@ class ChatRepository {
 
   Future<ChatMessageModel?> createLocalImageMessage({
     required String groupId,
+    String? tripId,
+    String? channelId,
+    String? chatId,
     required UserModel currentUser,
   }) async {
     final media = await _mediaService.pickImageFromGallery();
     if (media == null) return null;
     return _createLocalMediaMessage(
       groupId: groupId,
+      tripId: tripId,
+      channelId: channelId,
+      chatId: chatId,
       currentUser: currentUser,
       media: media,
       content: 'Image',
@@ -91,12 +103,18 @@ class ChatRepository {
 
   Future<ChatMessageModel?> stopAndCreateLocalVoiceMessage({
     required String groupId,
+    String? tripId,
+    String? channelId,
+    String? chatId,
     required UserModel currentUser,
   }) async {
     final media = await _mediaService.stopVoiceRecording();
     if (media == null) return null;
     return _createLocalMediaMessage(
       groupId: groupId,
+      tripId: tripId,
+      channelId: channelId,
+      chatId: chatId,
       currentUser: currentUser,
       media: media,
       content: 'Voice note',
@@ -105,6 +123,9 @@ class ChatRepository {
 
   Future<ChatMessageModel> _createLocalMediaMessage({
     required String groupId,
+    String? tripId,
+    String? channelId,
+    String? chatId,
     required UserModel currentUser,
     required PickedChatMedia media,
     required String content,
@@ -114,6 +135,9 @@ class ChatRepository {
       localId: _uuid.v4(),
       clientMessageId: _uuid.v4(),
       groupId: groupId,
+      tripId: tripId,
+      channelId: channelId,
+      chatId: chatId,
       senderId: currentUser.id,
       senderName: currentUser.fullName,
       messageType: media.messageType,
@@ -160,6 +184,9 @@ class ChatRepository {
         filePath: path!,
         fileName: message.fileName ?? '${message.clientMessageId}.bin',
         content: message.content,
+        tripId: message.tripId,
+        channelId: message.channelId,
+        chatId: message.chatId,
         mimeType: message.mimeType,
         durationMs: message.durationMs,
         createdAt: message.createdAt,

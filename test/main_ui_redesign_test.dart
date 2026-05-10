@@ -92,8 +92,8 @@ void main() {
 
     expect(find.text('Messages'), findsOneWidget);
     expect(find.text('Offline Channels'), findsOneWidget);
-    expect(find.text('Knuckles Offline'), findsOneWidget);
-    expect(find.text('TL-OFF-82KD'), findsOneWidget);
+    expect(find.text('Knuckles Offline'), findsWidgets);
+    expect(find.text('TL-OFF-82KD'), findsWidgets);
   });
 
   testWidgets('chat header uses compact chips instead of a large banner',

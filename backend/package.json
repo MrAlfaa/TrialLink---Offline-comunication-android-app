@@ -15,7 +15,9 @@
     "test:phase13e": "node scripts/phase13e-bridge-smoke.js",
     "test:phase13f": "node scripts/phase13f-identity-bootstrap-smoke.js",
     "test:phase13g": "node scripts/phase13g-group-member-management-smoke.js",
-    "test:phase13h": "node scripts/phase13h-chat-media-smoke.js"
+    "test:phase13h": "node scripts/phase13h-chat-media-smoke.js",
+    "test:phase14g": "node scripts/phase14g-trip-context-smoke.js",
+    "qa:clean-user": "node scripts/qa-clean-user-data.js"
   },
   "keywords": [
     "traillink",

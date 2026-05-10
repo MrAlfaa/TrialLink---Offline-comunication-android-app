@@ -4,6 +4,7 @@ class OfflineTextMessageModel {
     required this.packetId,
     required this.channelId,
     required this.channelCode,
+    this.chatId,
     required this.senderId,
     required this.senderName,
     required this.content,
@@ -24,6 +25,7 @@ class OfflineTextMessageModel {
   final String packetId;
   final String channelId;
   final String channelCode;
+  final String? chatId;
   final String senderId;
   final String senderName;
   final String content;
@@ -51,6 +53,7 @@ class OfflineTextMessageModel {
       packetId: packetId,
       channelId: channelId,
       channelCode: channelCode,
+      chatId: chatId,
       senderId: senderId,
       senderName: senderName,
       content: content,
@@ -74,6 +77,7 @@ class OfflineTextMessageModel {
       packetId: row['packet_id'].toString(),
       channelId: row['channel_id'].toString(),
       channelCode: row['channel_code'].toString(),
+      chatId: row['chat_id']?.toString(),
       senderId: row['sender_id'].toString(),
       senderName: row['sender_name'].toString(),
       content: row['content'].toString(),
@@ -98,6 +102,7 @@ class OfflineTextMessageModel {
       'packet_id': packetId,
       'channel_id': channelId,
       'channel_code': channelCode,
+      'chat_id': chatId,
       'sender_id': senderId,
       'sender_name': senderName,
       'content': content,
