@@ -87,6 +87,14 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
         if (endpointId == null) return;
         final existing = _peers[endpointId];
         if (existing != null) {
+          if (existing.status == PeerConnectionStatus.connected) {
+            _debugNearbyPacket(
+              'discovery_lost_connected_ignored',
+              endpointId: endpointId,
+              reason: 'Endpoint discovery was lost while connection is alive.',
+            );
+            return;
+          }
           _emitConnection(
             existing.copyWith(
               status: PeerConnectionStatus.lost,

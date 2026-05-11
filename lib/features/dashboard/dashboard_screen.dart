@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/connectivity/connection_mode_provider.dart';
+import '../../core/config/offline_text_only_flags.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/identity/auth_access_controller.dart';
@@ -762,7 +763,7 @@ List<_ActionSpec> _actionsFor({
     ];
   }
 
-  return [
+  final textOnlyActions = [
     _ActionSpec(
       'Channels',
       'Offline channel setup',
@@ -787,6 +788,24 @@ List<_ActionSpec> _actionsFor({
       'nearby_discovery',
       () => context.go('/nearby-peers'),
     ),
+  ];
+
+  if (OfflineTextOnlyFlags.enabled) {
+    return [
+      ...textOnlyActions,
+      _ActionSpec(
+        'Compass',
+        'Connection guidance',
+        Icons.explore_rounded,
+        AppColors.deepForest,
+        'connectivity_compass',
+        () => context.go('/connectivity'),
+      ),
+    ];
+  }
+
+  return [
+    ...textOnlyActions,
     _ActionSpec(
       'SOS',
       'Broadcast emergency alert',

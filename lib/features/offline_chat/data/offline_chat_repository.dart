@@ -122,6 +122,23 @@ class OfflineChatRepository {
       );
       return;
     }
+    if (await _local.ackExistsForMessage(
+      messageId: message.messageId,
+      packetId: message.packetId,
+    )) {
+      await _local.updateMessageStatus(
+        messageId: message.messageId,
+        deliveryStatus: 'delivered',
+        ackStatus: 'acknowledged',
+      );
+      _debugOfflineChat(
+        'ack_timeout_skip',
+        packetId: message.packetId,
+        messageId: message.messageId,
+        reason: 'ack-already-saved',
+      );
+      return;
+    }
     _debugOfflineChat('ack_timeout_mark', messageId: messageId);
     await markAckTimeout(messageId);
   }
@@ -174,10 +191,10 @@ class OfflineChatRepository {
     if (sent) {
       await _local.markQueueStatus(packet.packetId, 'sent');
       if (packet.messageId != null) {
-        await _local.updateMessageStatus(
+        await _local.markMessageSentAfterTransfer(
           messageId: packet.messageId!,
-          deliveryStatus: 'sent',
-          ackStatus: packet.requiresAck ? 'waiting' : 'none',
+          packetId: packet.packetId,
+          requiresAck: packet.requiresAck,
         );
       }
     }
@@ -307,6 +324,20 @@ class OfflineChatRepository {
         receivedAt: DateTime.now(),
       ),
     );
+    await _markMessageAcknowledged(packet);
+    try {
+      await _recordAckMetric(packet);
+    } catch (error) {
+      _debugOfflineChat(
+        'ack_metric_failed',
+        packetId: packet.packetId,
+        messageId: packet.ackForMessageId,
+        reason: error.toString(),
+      );
+    }
+  }
+
+  Future<void> _recordAckMetric(OfflinePacketModel packet) async {
     final peers = await connectedPeers(packet.channelCode);
     final matchingPeer = peers.where((peer) => peer.userId == packet.senderId);
     await _metricsRecorder.recordAck(
@@ -320,30 +351,43 @@ class OfflineChatRepository {
       ackRttMs:
           DateTime.now().difference(packet.createdAt).inMilliseconds.abs(),
     );
+  }
+
+  Future<void> _markMessageAcknowledged(OfflinePacketModel packet) async {
     final messageId = packet.ackForMessageId;
     if (messageId != null && messageId.isNotEmpty) {
-      _debugOfflineChat(
-        'ack_rx',
-        packetId: packet.packetId,
-        messageId: messageId,
-      );
-      await _local.updateMessageStatus(
+      final updated = await _local.updateMessageStatus(
         messageId: messageId,
         deliveryStatus: 'delivered',
         ackStatus: 'acknowledged',
       );
-    } else if ((packet.ackForPacketId ?? '').isNotEmpty) {
       _debugOfflineChat(
         'ack_rx',
         packetId: packet.packetId,
-        reason: 'by-packet-id',
+        messageId: messageId,
+        reason: updated > 0 ? 'by-message-id' : 'message-id-not-found',
       );
-      await _local.updateMessageStatusByPacket(
-        packetId: packet.ackForPacketId!,
-        deliveryStatus: 'delivered',
-        ackStatus: 'acknowledged',
-      );
+      if (updated > 0) return;
     }
+    final packetId = packet.ackForPacketId;
+    if (packetId != null && packetId.isNotEmpty) {
+      final updated = await _local.updateMessageStatusByPacket(
+        packetId: packetId,
+        deliveryStatus: 'delivered',
+        ackStatus: 'acknowledged',
+      );
+      _debugOfflineChat(
+        'ack_rx',
+        packetId: packet.packetId,
+        reason: updated > 0 ? 'by-packet-id' : 'packet-id-not-found',
+      );
+      return;
+    }
+    _debugOfflineChat(
+      'ack_rx',
+      packetId: packet.packetId,
+      reason: 'missing-target',
+    );
   }
 }
 
