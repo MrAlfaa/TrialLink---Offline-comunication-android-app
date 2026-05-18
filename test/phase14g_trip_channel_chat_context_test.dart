@@ -13,7 +13,7 @@ void main() {
       final source =
           File('lib/core/database/local_database.dart').readAsStringSync();
 
-      expect(source, contains('version: 21'));
+      expect(source, contains('version: 22'));
       expect(source, contains('active_channel_id'));
       expect(source, contains('last_opened_at'));
       expect(source, contains('trip_id'));

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../trip_context/data/cloud_prepared_trip_repository.dart';
 import 'group_controller.dart';
 
 class JoinGroupScreen extends ConsumerStatefulWidget {
@@ -26,15 +27,18 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final group =
-        await ref.read(groupMutationControllerProvider.notifier).joinGroup(
-              groupCode: _codeController.text.trim(),
-            );
+    final metadata = await ref
+        .read(cloudPreparedTripRepositoryProvider)
+        .joinCloudPreparedTrip(
+          _codeController.text.trim(),
+        );
 
-    if (group != null) {
-      ref.invalidate(myGroupsProvider);
-      if (mounted) context.go('/groups/${group.id}');
-    }
+    ref.invalidate(myGroupsProvider);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Offline backup prepared')),
+    );
+    context.go('/groups/${metadata.group.id}');
   }
 
   @override

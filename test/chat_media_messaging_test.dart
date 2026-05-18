@@ -138,7 +138,7 @@ void main() {
     final chatSource = File('lib/features/chat/presentation/chat_screen.dart')
         .readAsStringSync();
 
-    expect(dbSource, contains('version: 21'));
+    expect(dbSource, contains('version: 22'));
     expect(dbSource, contains('local_file_path'));
     expect(dbSource, contains('upload_status'));
     expect(chatSource, contains('state.isOnline &&'));

@@ -39,7 +39,7 @@ class LocalDatabase {
 
     _database = await openDatabase(
       dbPath,
-      version: 21,
+      version: 22,
       onCreate: (db, version) async {
         await _createPhaseOneTables(db);
         await _createPhaseTwoTables(db);
@@ -62,6 +62,7 @@ class LocalDatabase {
         await _createPhaseNineteenTables(db);
         await _createPhaseTwentyTables(db);
         await _createPhaseTwentyOneTables(db);
+        await _createPhaseTwentyTwoTables(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -123,6 +124,9 @@ class LocalDatabase {
         }
         if (oldVersion < 21) {
           await _createPhaseTwentyOneTables(db);
+        }
+        if (oldVersion < 22) {
+          await _createPhaseTwentyTwoTables(db);
         }
       },
     );
@@ -1406,6 +1410,106 @@ class LocalDatabase {
     );
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_p2p_peers_channel ON p2p_connected_peers(channel_code, connection_state)',
+    );
+  }
+
+  Future<void> _createPhaseTwentyTwoTables(Database db) async {
+    await _addColumnIfMissing(
+      db,
+      tableName: 'trip_sessions',
+      columnName: 'offline_backup_ready',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _addColumnIfMissing(
+      db,
+      tableName: 'trip_sessions',
+      columnName: 'cloud_prepared_at',
+      definition: 'TEXT',
+    );
+    await _addColumnIfMissing(
+      db,
+      tableName: 'trip_sessions',
+      columnName: 'primary_channel_id',
+      definition: 'TEXT',
+    );
+    await _addColumnIfMissing(
+      db,
+      tableName: 'offline_channels',
+      columnName: 'offline_backup_ready',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _addColumnIfMissing(
+      db,
+      tableName: 'offline_channels',
+      columnName: 'cloud_prepared_at',
+      definition: 'TEXT',
+    );
+    await _addColumnIfMissing(
+      db,
+      tableName: 'offline_channels',
+      columnName: 'primary_channel_id',
+      definition: 'TEXT',
+    );
+    await _addColumnIfMissing(
+      db,
+      tableName: 'offline_channels',
+      columnName: 'channel_key_hash',
+      definition: 'TEXT',
+    );
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS cloud_trip_member_devices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trip_id TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        cloud_group_id TEXT NOT NULL,
+        user_id TEXT,
+        public_user_id TEXT,
+        local_user_id TEXT,
+        app_device_id TEXT,
+        display_name TEXT NOT NULL,
+        phone_number TEXT,
+        capabilities_json TEXT,
+        last_seen_at TEXT,
+        verification_source TEXT NOT NULL DEFAULT 'cloud_roster',
+        created_at TEXT NOT NULL,
+        updated_at TEXT,
+        UNIQUE(trip_id, user_id, app_device_id),
+        UNIQUE(trip_id, public_user_id, app_device_id),
+        UNIQUE(trip_id, local_user_id, app_device_id)
+      )
+    ''');
+    await _addColumnIfMissing(
+      db,
+      tableName: 'nearby_peers',
+      columnName: 'trip_id',
+      definition: 'TEXT',
+    );
+    await _addColumnIfMissing(
+      db,
+      tableName: 'nearby_peers',
+      columnName: 'public_user_id',
+      definition: 'TEXT',
+    );
+    await _addColumnIfMissing(
+      db,
+      tableName: 'nearby_peers',
+      columnName: 'app_device_id',
+      definition: 'TEXT',
+    );
+    await _addColumnIfMissing(
+      db,
+      tableName: 'nearby_peers',
+      columnName: 'verification_status',
+      definition: "TEXT NOT NULL DEFAULT 'unknown_same_channel'",
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_cloud_trip_member_devices_trip ON cloud_trip_member_devices(trip_id, public_user_id, app_device_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_cloud_trip_member_devices_local ON cloud_trip_member_devices(trip_id, local_user_id, app_device_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_nearby_peers_validation ON nearby_peers(trip_id, verification_status)',
     );
   }
 

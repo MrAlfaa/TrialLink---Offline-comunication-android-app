@@ -9,13 +9,13 @@ import '../../../core/identity/auth_access_state.dart';
 import '../../../core/identity/local_identity_repository.dart';
 import '../../../core/settings/settings_service.dart';
 import '../../../shared/widgets/compact_status_chip.dart';
-import '../../groups/presentation/group_controller.dart';
 import '../../nearby/data/nearby_permission_service.dart';
 import '../../offline_channel/presentation/offline_channel_controller.dart';
 import '../../p2p_session/data/p2p_session_guard.dart';
 import '../../p2p_session/data/p2p_session_service.dart';
 import '../../p2p_session/presentation/p2p_session_switch_dialog.dart';
 import '../../ptt/data/ptt_audio_service.dart';
+import '../../trip_context/data/cloud_prepared_trip_repository.dart';
 import '../../trip_context/data/trip_context_service.dart';
 import '../data/trip_session_repository.dart';
 import '../data/trip_session_service.dart';
@@ -286,19 +286,14 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
             .read(p2pSessionGuardProvider)
             .disconnectActiveSession(reason: 'switch_trip');
       }
-      final access = ref
-          .read(authAccessControllerProvider)
-          .accessState
-          .canUseBackendFeatures;
       switch (_type) {
         case TripWizardType.cloudBackup:
-          await repo.createCloudBackupTrip(
-            tripName: _tripNameController.text,
-            description: _descriptionController.text,
-            identity: identity,
-            groupRepository: access ? ref.read(groupRepositoryProvider) : null,
-            customChannelCode: _blankToNull(_customCodeController.text),
-          );
+          await ref
+              .read(cloudPreparedTripRepositoryProvider)
+              .createCloudPreparedTrip(
+                tripName: _tripNameController.text,
+                description: _descriptionController.text,
+              );
         case TripWizardType.offlineOnly:
           await repo.createOfflineOnlyTrip(
             tripName: _tripNameController.text,

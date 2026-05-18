@@ -25,6 +25,7 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
   final Map<String, NearbyPeerModel> _peers = {};
 
   String? _currentEndpointName;
+  NearbyAdvertisementPayload? _currentPayload;
   String? _activeChannelCode;
   String _displayName = 'TrailLink User';
 
@@ -48,18 +49,28 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
     required String displayName,
     required String activeChannelId,
     required String activeChannelCode,
+    String? tripId,
+    String? publicUserId,
+    String? appDeviceId,
+    List<String> capabilities = const ['text'],
   }) async {
     _displayName = displayName;
     _activeChannelCode = activeChannelCode;
     final deviceName = await _deviceName();
-    _currentEndpointName = NearbyAdvertisementPayload(
+    _currentPayload = NearbyAdvertisementPayload(
       userId: userId,
       displayName: displayName,
       activeChannelId: activeChannelId,
       activeChannelCode: activeChannelCode,
       deviceName: deviceName,
       timestamp: DateTime.now(),
-    ).toEndpointName();
+      tripId: tripId,
+      publicUserId: publicUserId,
+      appDeviceId: appDeviceId,
+      capabilities: capabilities,
+      protocolVersion: '3.0',
+    );
+    _currentEndpointName = _currentPayload!.toEndpointName();
 
     final ok = await _nearby.startAdvertising(
       _currentEndpointName!,
@@ -256,6 +267,9 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
     _emitConnection(
       existing.copyWith(status: nextStatus, lastSeenAt: DateTime.now()),
     );
+    if (nextStatus == PeerConnectionStatus.connected) {
+      unawaited(_sendPeerHello(endpointId));
+    }
   }
 
   void _onDisconnected(String endpointId) {
@@ -305,6 +319,10 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
         deviceName: payload.deviceName,
         activeChannelId: payload.activeChannelId,
         activeChannelCode: payload.activeChannelCode,
+        tripId: payload.tripId,
+        publicUserId: payload.publicUserId,
+        appDeviceId: payload.appDeviceId,
+        verificationStatus: 'unknown_same_channel',
         status: existing?.status ?? fallbackStatus,
         discoveredAt: existing?.discoveredAt ?? now,
         lastSeenAt: now,
@@ -324,6 +342,34 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
     if (!Platform.isAndroid) return 'TrailLink Device';
     final info = await DeviceInfoPlugin().androidInfo;
     return '${info.manufacturer} ${info.model}'.trim();
+  }
+
+  Future<void> _sendPeerHello(String endpointId) async {
+    final payload = _currentPayload;
+    if (payload == null) return;
+    final packet = jsonEncode({
+      'packetId': 'peer_hello_${DateTime.now().microsecondsSinceEpoch}',
+      'packetType': 'peer_hello',
+      'channelId': payload.activeChannelId,
+      'channelCode': payload.activeChannelCode,
+      'senderId': payload.publicUserId ?? payload.userId,
+      'senderLocalId': payload.userId,
+      'senderName': payload.displayName,
+      'targetType': 'broadcast',
+      'requiresAck': false,
+      'payload': payload.toPeerHelloJson(),
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+    try {
+      await sendPacket(endpointId: endpointId, packetJson: packet);
+    } catch (error) {
+      _debugNearbyPacket(
+        'peer_hello_failed',
+        endpointId: endpointId,
+        packetJson: packet,
+        reason: error.toString(),
+      );
+    }
   }
 
   @override

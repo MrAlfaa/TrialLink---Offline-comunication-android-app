@@ -8,6 +8,10 @@ class NearbyAdvertisementPayload {
     required this.activeChannelCode,
     required this.deviceName,
     required this.timestamp,
+    this.tripId,
+    this.publicUserId,
+    this.appDeviceId,
+    this.capabilities = const ['text'],
     this.appId = 'TrailLink',
     this.protocolVersion = '1.0',
   });
@@ -20,8 +24,29 @@ class NearbyAdvertisementPayload {
   final String activeChannelCode;
   final String deviceName;
   final DateTime timestamp;
+  final String? tripId;
+  final String? publicUserId;
+  final String? appDeviceId;
+  final List<String> capabilities;
 
   factory NearbyAdvertisementPayload.fromEndpointName(String value) {
+    if (value.startsWith('TL3|')) {
+      final parts = value.split('|');
+      if (parts.length < 10) throw const FormatException('Invalid payload');
+      return NearbyAdvertisementPayload(
+        protocolVersion: '3.0',
+        tripId: parts[2],
+        activeChannelId: parts[3],
+        userId: parts[4],
+        publicUserId: parts[5].isEmpty ? null : parts[5],
+        appDeviceId: parts[6].isEmpty ? null : parts[6],
+        displayName: utf8.decode(base64Url.decode(_pad(parts[7]))),
+        activeChannelCode: parts[1],
+        deviceName: utf8.decode(base64Url.decode(_pad(parts[8]))),
+        capabilities: parts[9].isEmpty ? const ['text'] : parts[9].split(','),
+        timestamp: DateTime.now(),
+      );
+    }
     if (value.startsWith('TL2|')) {
       final parts = value.split('|');
       if (parts.length < 6) throw const FormatException('Invalid payload');
@@ -58,6 +83,14 @@ class NearbyAdvertisementPayload {
       deviceName: data['deviceName']?.toString() ?? 'Android Device',
       timestamp: DateTime.tryParse(data['timestamp']?.toString() ?? '') ??
           DateTime.now(),
+      tripId: data['tripId']?.toString(),
+      publicUserId: data['senderPublicUserId']?.toString() ??
+          data['publicUserId']?.toString(),
+      appDeviceId: data['appDeviceId']?.toString(),
+      capabilities: (data['capabilities'] as List<dynamic>?)
+              ?.map((item) => item.toString())
+              .toList(growable: false) ??
+          const ['text'],
     );
   }
 
@@ -68,16 +101,42 @@ class NearbyAdvertisementPayload {
         base64Url.encode(utf8.encode(shortName)).replaceAll('=', '');
     final encodedDevice =
         base64Url.encode(utf8.encode(shortDevice)).replaceAll('=', '');
+    final shortTripId = _compactId(tripId ?? '');
     final shortUserId = _compactId(userId);
+    final shortPublicUserId = _compact(publicUserId?.trim() ?? '', 18);
+    final shortDeviceId = _compactId(appDeviceId ?? '');
     final shortChannelId = _compactId(activeChannelId);
-    return 'TL2|$activeChannelCode|$shortUserId|$encodedName|$shortChannelId|$encodedDevice';
+    final caps = capabilities
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .take(5)
+        .join(',');
+    return 'TL3|$activeChannelCode|$shortTripId|$shortChannelId|$shortUserId|$shortPublicUserId|$shortDeviceId|$encodedName|$encodedDevice|$caps';
   }
 
   bool isCompatibleWith(String channelCode) {
     return appId == 'TrailLink' &&
         (protocolVersion.startsWith('1.') ||
-            protocolVersion.startsWith('2.')) &&
+            protocolVersion.startsWith('2.') ||
+            protocolVersion.startsWith('3.')) &&
         activeChannelCode == channelCode;
+  }
+
+  Map<String, Object?> toPeerHelloJson() {
+    return {
+      'appId': appId,
+      'protocolVersion': protocolVersion,
+      'tripId': tripId,
+      'channelId': activeChannelId,
+      'channelCode': activeChannelCode,
+      'senderLocalId': userId,
+      'senderPublicUserId': publicUserId,
+      'appDeviceId': appDeviceId,
+      'displayName': displayName,
+      'deviceName': deviceName,
+      'capabilities': capabilities,
+      'timestamp': timestamp.toIso8601String(),
+    };
   }
 
   static String _compact(String value, int maxLength) {

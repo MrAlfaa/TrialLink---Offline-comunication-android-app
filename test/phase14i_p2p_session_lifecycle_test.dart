@@ -7,11 +7,11 @@ import 'package:traillink/features/p2p_session/data/models/p2p_session_state.dar
 
 void main() {
   group('Phase 14I P2P session lifecycle', () {
-    test('SQLite v21 declares active P2P session and peer tables', () {
+    test('SQLite declares active P2P session and peer tables', () {
       final source =
           File('lib/core/database/local_database.dart').readAsStringSync();
 
-      expect(source, contains('version: 21'));
+      expect(source, contains('version: 22'));
       expect(source, contains('_createPhaseTwentyOneTables'));
       expect(source,
           contains('CREATE TABLE IF NOT EXISTS p2p_connection_sessions'));

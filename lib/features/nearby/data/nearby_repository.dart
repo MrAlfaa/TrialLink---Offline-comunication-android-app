@@ -69,12 +69,20 @@ class NearbyRepository {
     required String displayName,
     required String activeChannelId,
     required String activeChannelCode,
+    String? tripId,
+    String? publicUserId,
+    String? appDeviceId,
+    List<String> capabilities = const ['text'],
   }) {
     return _transport.startAdvertising(
       userId: userId,
       displayName: displayName,
       activeChannelId: activeChannelId,
       activeChannelCode: activeChannelCode,
+      tripId: tripId,
+      publicUserId: publicUserId,
+      appDeviceId: appDeviceId,
+      capabilities: capabilities,
     );
   }
 

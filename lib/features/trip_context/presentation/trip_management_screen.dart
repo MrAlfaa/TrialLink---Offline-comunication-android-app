@@ -8,6 +8,7 @@ import '../../p2p_session/data/p2p_session_service.dart';
 import '../../p2p_session/presentation/p2p_session_switch_dialog.dart';
 import '../../trip/data/trip_session_model.dart';
 import '../data/trip_context_service.dart';
+import '../data/trip_member_device_roster_repository.dart';
 
 class TripManagementScreen extends ConsumerWidget {
   const TripManagementScreen({super.key});
@@ -95,6 +96,44 @@ class _TripManagementCard extends ConsumerWidget {
                   'Channel: ${trip.channelCode}',
               ].join('  |  '),
               style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 10),
+            FutureBuilder<(int, int)>(
+              future: _rosterCounts(ref, trip.tripId),
+              builder: (context, snapshot) {
+                final counts = snapshot.data ?? (0, 0);
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _StatusChip(
+                      label: trip.cloudGroupId == null
+                          ? 'Cloud not linked'
+                          : 'Cloud ready',
+                      active: trip.cloudGroupId != null,
+                    ),
+                    _StatusChip(
+                      label: trip.offlineBackupReady
+                          ? 'Offline backup ready'
+                          : 'Offline backup missing',
+                      active: trip.offlineBackupReady,
+                    ),
+                    if ((trip.channelCode ?? '').isNotEmpty)
+                      _StatusChip(
+                        label: 'Channel code ${trip.channelCode}',
+                        active: true,
+                      ),
+                    _StatusChip(
+                      label: 'Members cached ${counts.$1}',
+                      active: counts.$1 > 0,
+                    ),
+                    _StatusChip(
+                      label: 'Devices cached ${counts.$2}',
+                      active: counts.$2 > 0,
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 12),
             FutureBuilder<List<OfflineChannelModel>>(
@@ -285,6 +324,13 @@ class _EmptyTripsState extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<(int, int)> _rosterCounts(WidgetRef ref, String tripId) async {
+  final repository = ref.read(tripMemberDeviceRosterRepositoryProvider);
+  final members = await repository.countMembers(tripId);
+  final devices = await repository.countDevices(tripId);
+  return (members, devices);
 }
 
 Future<void> _showCreateChannelDialog(

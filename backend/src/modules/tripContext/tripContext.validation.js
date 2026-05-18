@@ -1,5 +1,61 @@
-const { body, query, validationResult } = require('express-validator');
+const { body, param, query, validationResult } = require('express-validator');
 const { sendError } = require('../../utils/response');
+
+const capabilitiesValidation = [
+  body('capabilities').optional().isObject().withMessage('Capabilities must be an object'),
+  body('capabilities.supportsNearby').optional().isBoolean().withMessage('supportsNearby must be boolean'),
+  body('capabilities.supportsPtt').optional().isBoolean().withMessage('supportsPtt must be boolean'),
+  body('capabilities.supportsLiveRadio').optional().isBoolean().withMessage('supportsLiveRadio must be boolean'),
+];
+
+const cloudPreparedCreateValidation = [
+  body('tripName')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ min: 3, max: 120 })
+    .withMessage('Trip name must be 3-120 characters'),
+  body('groupName')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ min: 3, max: 120 })
+    .withMessage('Group name must be 3-120 characters'),
+  body().custom((value) => {
+    if ((value.tripName || value.groupName || '').trim().length >= 3) return true;
+    throw new Error('Trip name is required');
+  }),
+  body('description')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('Description is too long'),
+  body('localUserId').optional({ nullable: true, checkFalsy: true }).trim().isLength({ max: 120 }),
+  body('appDeviceId').trim().notEmpty().isLength({ max: 120 }).withMessage('App device id is required'),
+  ...capabilitiesValidation,
+];
+
+const cloudPreparedJoinValidation = [
+  body('tripCode')
+    .optional({ checkFalsy: true })
+    .trim()
+    .matches(/^TL-[A-Z0-9]{5}$/)
+    .withMessage('Valid trip code is required'),
+  body('groupCode')
+    .optional({ checkFalsy: true })
+    .trim()
+    .matches(/^TL-[A-Z0-9]{5}$/)
+    .withMessage('Valid group code is required'),
+  body().custom((value) => {
+    if ((value.tripCode || value.groupCode || '').trim().length > 0) return true;
+    throw new Error('Trip code is required');
+  }),
+  body('localUserId').optional({ nullable: true, checkFalsy: true }).trim().isLength({ max: 120 }),
+  body('appDeviceId').trim().notEmpty().isLength({ max: 120 }).withMessage('App device id is required'),
+  ...capabilitiesValidation,
+];
+
+const cloudPreparedMetadataValidation = [
+  param('tripId').trim().notEmpty().withMessage('Trip id is required'),
+];
 
 const syncTripContextValidation = [
   body('trips').optional().isArray({ max: 100 }).withMessage('Trips must be an array'),
@@ -50,6 +106,9 @@ const validate = (req, res, next) => {
 };
 
 module.exports = {
+  cloudPreparedCreateValidation,
+  cloudPreparedJoinValidation,
+  cloudPreparedMetadataValidation,
   getTripContextValidation,
   syncTripContextValidation,
   validate,

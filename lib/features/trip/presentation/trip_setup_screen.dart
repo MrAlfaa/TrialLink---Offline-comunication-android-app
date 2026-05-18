@@ -14,6 +14,7 @@ import '../../offline_channel/presentation/offline_channel_controller.dart';
 import '../../p2p_session/data/p2p_session_guard.dart';
 import '../../p2p_session/data/p2p_session_service.dart';
 import '../../p2p_session/presentation/p2p_session_switch_dialog.dart';
+import '../../trip_context/data/cloud_prepared_trip_repository.dart';
 import '../../trip_context/data/trip_context_service.dart';
 import '../data/trip_session_repository.dart';
 import '../data/trip_session_service.dart';
@@ -383,10 +384,14 @@ class _TripSetupScreenState extends ConsumerState<TripSetupScreen> {
       _showError(context, 'Local identity is required before linking a group.');
       return false;
     }
-    await ref.read(tripSessionRepositoryProvider).createOnlineTripFromGroup(
-          group: group,
-          localIdentityId: identity.localUserId,
-        );
+    await ref
+        .read(cloudPreparedTripRepositoryProvider)
+        .joinCloudPreparedTrip(group.groupCode);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Offline backup prepared')),
+      );
+    }
     return true;
   }
 

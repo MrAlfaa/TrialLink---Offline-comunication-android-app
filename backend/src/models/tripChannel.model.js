@@ -33,6 +33,7 @@ const tripChannelSchema = new mongoose.Schema(
       trim: true,
       maxlength: 40,
     },
+    channelKeyHash: { type: String, trim: true, default: null },
     isPrimary: { type: Boolean, default: false },
     isActive: { type: Boolean, default: false, index: true },
     channelStatus: {

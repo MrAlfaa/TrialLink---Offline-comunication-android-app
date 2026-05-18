@@ -13,6 +13,10 @@ class NearbyPeerModel {
     required this.lastSeenAt,
     this.rssi,
     this.isSameChannel = true,
+    this.tripId,
+    this.publicUserId,
+    this.appDeviceId,
+    this.verificationStatus = 'unknown_same_channel',
   });
 
   final String endpointId;
@@ -26,6 +30,10 @@ class NearbyPeerModel {
   final DateTime lastSeenAt;
   final int? rssi;
   final bool isSameChannel;
+  final String? tripId;
+  final String? publicUserId;
+  final String? appDeviceId;
+  final String verificationStatus;
 
   NearbyPeerModel copyWith({
     String? endpointId,
@@ -39,6 +47,10 @@ class NearbyPeerModel {
     DateTime? lastSeenAt,
     int? rssi,
     bool? isSameChannel,
+    String? tripId,
+    String? publicUserId,
+    String? appDeviceId,
+    String? verificationStatus,
   }) {
     return NearbyPeerModel(
       endpointId: endpointId ?? this.endpointId,
@@ -52,6 +64,10 @@ class NearbyPeerModel {
       lastSeenAt: lastSeenAt ?? this.lastSeenAt,
       rssi: rssi ?? this.rssi,
       isSameChannel: isSameChannel ?? this.isSameChannel,
+      tripId: tripId ?? this.tripId,
+      publicUserId: publicUserId ?? this.publicUserId,
+      appDeviceId: appDeviceId ?? this.appDeviceId,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
     );
   }
 
@@ -74,6 +90,11 @@ class NearbyPeerModel {
           DateTime.now(),
       rssi: row['rssi'] is int ? row['rssi'] as int : null,
       isSameChannel: row['is_same_channel'] == 1,
+      tripId: row['trip_id']?.toString(),
+      publicUserId: row['public_user_id']?.toString(),
+      appDeviceId: row['app_device_id']?.toString(),
+      verificationStatus:
+          row['verification_status']?.toString() ?? 'unknown_same_channel',
     );
   }
 
@@ -90,6 +111,10 @@ class NearbyPeerModel {
       'last_seen_at': lastSeenAt.toIso8601String(),
       'rssi': rssi,
       'is_same_channel': isSameChannel ? 1 : 0,
+      'trip_id': tripId,
+      'public_user_id': publicUserId,
+      'app_device_id': appDeviceId,
+      'verification_status': verificationStatus,
     };
   }
 }

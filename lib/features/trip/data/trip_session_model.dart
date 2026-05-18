@@ -18,6 +18,9 @@ class TripSessionModel {
     required this.createdAt,
     this.lastOpenedAt,
     this.updatedAt,
+    this.offlineBackupReady = false,
+    this.cloudPreparedAt,
+    this.primaryChannelId,
   });
 
   final int? id;
@@ -38,6 +41,9 @@ class TripSessionModel {
   final DateTime createdAt;
   final DateTime? lastOpenedAt;
   final DateTime? updatedAt;
+  final bool offlineBackupReady;
+  final DateTime? cloudPreparedAt;
+  final String? primaryChannelId;
 
   bool get isActive => status == 'active';
   bool get isOffline => mode == 'offline';
@@ -66,6 +72,11 @@ class TripSessionModel {
           DateTime.now(),
       lastOpenedAt: DateTime.tryParse(row['last_opened_at']?.toString() ?? ''),
       updatedAt: DateTime.tryParse(row['updated_at']?.toString() ?? ''),
+      offlineBackupReady: row['offline_backup_ready'] == 1 ||
+          row['offline_backup_ready'] == true,
+      cloudPreparedAt:
+          DateTime.tryParse(row['cloud_prepared_at']?.toString() ?? ''),
+      primaryChannelId: row['primary_channel_id']?.toString(),
     );
   }
 
@@ -89,6 +100,9 @@ class TripSessionModel {
       'created_at': createdAt.toIso8601String(),
       'last_opened_at': lastOpenedAt?.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
+      'offline_backup_ready': offlineBackupReady ? 1 : 0,
+      'cloud_prepared_at': cloudPreparedAt?.toIso8601String(),
+      'primary_channel_id': primaryChannelId ?? activeChannelId,
     };
   }
 }

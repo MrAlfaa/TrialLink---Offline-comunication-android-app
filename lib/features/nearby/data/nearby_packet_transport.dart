@@ -6,6 +6,10 @@ abstract class NearbyPacketTransport {
     required String displayName,
     required String activeChannelId,
     required String activeChannelCode,
+    String? tripId,
+    String? publicUserId,
+    String? appDeviceId,
+    List<String> capabilities = const ['text'],
   });
 
   Future<void> stopAdvertising();
