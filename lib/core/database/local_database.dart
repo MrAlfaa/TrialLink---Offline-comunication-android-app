@@ -39,7 +39,7 @@ class LocalDatabase {
 
     _database = await openDatabase(
       dbPath,
-      version: 20,
+      version: 21,
       onCreate: (db, version) async {
         await _createPhaseOneTables(db);
         await _createPhaseTwoTables(db);
@@ -61,6 +61,7 @@ class LocalDatabase {
         await _createPhaseEighteenTables(db);
         await _createPhaseNineteenTables(db);
         await _createPhaseTwentyTables(db);
+        await _createPhaseTwentyOneTables(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -119,6 +120,9 @@ class LocalDatabase {
         }
         if (oldVersion < 20) {
           await _createPhaseTwentyTables(db);
+        }
+        if (oldVersion < 21) {
+          await _createPhaseTwentyOneTables(db);
         }
       },
     );
@@ -1351,6 +1355,57 @@ class LocalDatabase {
     );
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_chat_rooms_channel ON chat_rooms(channel_id, is_default, is_active)',
+    );
+  }
+
+  Future<void> _createPhaseTwentyOneTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS p2p_connection_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL UNIQUE,
+        trip_id TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        channel_code TEXT NOT NULL,
+        local_user_id TEXT NOT NULL,
+        state TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        last_activity_at TEXT,
+        error_message TEXT,
+        is_active INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS p2p_connected_peers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        trip_id TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        channel_code TEXT NOT NULL,
+        endpoint_id TEXT,
+        peer_local_id TEXT,
+        peer_public_user_id TEXT,
+        peer_display_name TEXT,
+        connection_state TEXT NOT NULL,
+        last_seen_at TEXT,
+        last_heartbeat_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT,
+        UNIQUE(session_id, endpoint_id),
+        UNIQUE(session_id, peer_local_id)
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_p2p_sessions_active ON p2p_connection_sessions(is_active, state)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_p2p_sessions_trip ON p2p_connection_sessions(trip_id, channel_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_p2p_peers_session ON p2p_connected_peers(session_id, connection_state)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_p2p_peers_channel ON p2p_connected_peers(channel_code, connection_state)',
     );
   }
 

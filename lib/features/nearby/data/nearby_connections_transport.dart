@@ -147,6 +147,25 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
   }
 
   @override
+  Future<void> disconnectAllPeers() async {
+    await _nearby.stopAdvertising();
+    await _nearby.stopDiscovery();
+    final endpointIds = _peers.keys.toList(growable: false);
+    for (final endpointId in endpointIds) {
+      await _nearby.disconnectFromEndpoint(endpointId);
+      final existing = _peers[endpointId];
+      if (existing != null) {
+        _emitConnection(
+          existing.copyWith(
+            status: PeerConnectionStatus.disconnected,
+            lastSeenAt: DateTime.now(),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
   bool isConnected(String endpointId) {
     return _peers[endpointId]?.status == PeerConnectionStatus.connected;
   }

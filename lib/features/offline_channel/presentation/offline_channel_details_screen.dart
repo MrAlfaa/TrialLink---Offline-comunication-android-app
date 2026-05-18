@@ -7,6 +7,9 @@ import '../../../core/identity/auth_access_controller.dart';
 import '../../../core/identity/current_user_actor.dart';
 import '../../../shared/widgets/compact_status_chip.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../p2p_session/data/p2p_session_guard.dart';
+import '../../p2p_session/data/p2p_session_service.dart';
+import '../../p2p_session/presentation/p2p_session_switch_dialog.dart';
 import '../../trip_context/data/trip_context_service.dart';
 import '../data/models/offline_channel_member_model.dart';
 import '../data/models/offline_channel_model.dart';
@@ -80,6 +83,24 @@ class OfflineChannelDetailsScreen extends ConsumerWidget {
                         onSetActive: channel.isActive
                             ? null
                             : () async {
+                                final action =
+                                    await _resolveChannelSwitchAction(
+                                  context,
+                                  ref,
+                                  channel,
+                                );
+                                if (action == P2PSessionSwitchAction.cancel) {
+                                  return;
+                                }
+                                if (action ==
+                                    P2PSessionSwitchAction
+                                        .disconnectAndSwitch) {
+                                  await ref
+                                      .read(p2pSessionGuardProvider)
+                                      .disconnectActiveSession(
+                                        reason: 'switch_trip',
+                                      );
+                                }
                                 await controller
                                     .setActiveChannel(channel.channelId);
                                 ref
@@ -225,6 +246,27 @@ class OfflineChannelDetailsScreen extends ConsumerWidget {
       ..invalidate(activeTripContextProvider)
       ..invalidate(offlineChannelMembersProvider(channelId));
     if (context.mounted) context.go('/offline-channel');
+  }
+
+  Future<P2PSessionSwitchAction> _resolveChannelSwitchAction(
+    BuildContext context,
+    WidgetRef ref,
+    OfflineChannelModel channel,
+  ) async {
+    final session =
+        await ref.read(p2pSessionServiceProvider).getActiveSession();
+    if (session == null ||
+        !session.blocksTripSwitch ||
+        session.channelCode == channel.channelCode) {
+      return P2PSessionSwitchAction.disconnectAndSwitch;
+    }
+    if (!context.mounted) return P2PSessionSwitchAction.cancel;
+    return showP2PSessionSwitchDialog(
+      context: context,
+      currentTripName: session.channelCode,
+      newTripName: channel.channelName,
+      allowCreateInactive: false,
+    );
   }
 }
 

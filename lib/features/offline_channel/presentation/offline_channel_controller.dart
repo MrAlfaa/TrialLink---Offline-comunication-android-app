@@ -102,6 +102,7 @@ class OfflineChannelController
     required String channelName,
     required String description,
     String? customCode,
+    bool activate = true,
   }) async {
     state = const OfflineChannelMutationState(isLoading: true);
     try {
@@ -111,12 +112,14 @@ class OfflineChannelController
               channelName: channelName,
               description: description,
               customCode: customCode,
+              activate: activate,
             )
           : await _repository.createChannel(
               user: user,
               channelName: channelName,
               description: description,
               customCode: customCode,
+              activate: activate,
             );
       state = const OfflineChannelMutationState(
         successMessage: 'Offline channel created.',
@@ -140,6 +143,27 @@ class OfflineChannelController
       if (channel == null) throw StateError('Joined channel not found.');
       state = const OfflineChannelMutationState(
         successMessage: 'Offline channel joined and trip activated.',
+      );
+      return channel;
+    } catch (error) {
+      state = OfflineChannelMutationState(errorMessage: error.toString());
+      return null;
+    }
+  }
+
+  Future<OfflineChannelModel?> joinChannelAsInactive({
+    required String channelCode,
+  }) async {
+    state = const OfflineChannelMutationState(isLoading: true);
+    try {
+      final trip = await _tripContextService
+          .joinOfflineChannelAsInactiveTrip(channelCode);
+      final channelId = trip.activeChannelId ?? trip.offlineChannelId;
+      if (channelId == null) throw StateError('Joined channel not found.');
+      final channel = await _repository.getChannel(channelId);
+      if (channel == null) throw StateError('Joined channel not found.');
+      state = const OfflineChannelMutationState(
+        successMessage: 'Offline channel joined as inactive.',
       );
       return channel;
     } catch (error) {

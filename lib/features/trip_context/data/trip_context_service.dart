@@ -7,6 +7,7 @@ import '../../../core/identity/local_identity_model.dart';
 import '../../../core/identity/local_identity_repository.dart';
 import '../../offline_channel/data/models/offline_channel_model.dart';
 import '../../offline_channel/data/offline_channel_repository.dart';
+import '../../p2p_session/data/p2p_session_service.dart';
 import '../../trip/data/trip_session_model.dart';
 import '../../trip/data/trip_session_repository.dart';
 import 'models/active_trip_context.dart';
@@ -17,6 +18,7 @@ final tripContextServiceProvider = Provider<TripContextService>((ref) {
     identityRepository: ref.read(localIdentityRepositoryProvider),
     tripRepository: ref.read(tripSessionRepositoryProvider),
     channelRepository: OfflineChannelRepository(),
+    p2pSessionService: ref.read(p2pSessionServiceProvider),
   );
 });
 
@@ -77,17 +79,20 @@ class TripContextService {
     LocalIdentityRepository? identityRepository,
     TripSessionRepository? tripRepository,
     OfflineChannelRepository? channelRepository,
+    P2PSessionService? p2pSessionService,
     Uuid? uuid,
   })  : _database = database ?? LocalDatabase.instance,
         _identityRepository = identityRepository ?? LocalIdentityRepository(),
         _tripRepository = tripRepository ?? TripSessionRepository(),
         _channelRepository = channelRepository ?? OfflineChannelRepository(),
+        _p2pSessionService = p2pSessionService,
         _uuid = uuid ?? const Uuid();
 
   final LocalDatabase _database;
   final LocalIdentityRepository _identityRepository;
   final TripSessionRepository _tripRepository;
   final OfflineChannelRepository _channelRepository;
+  final P2PSessionService? _p2pSessionService;
   final Uuid _uuid;
 
   Future<ActiveTripContext?> getActiveTripContext() async {
@@ -108,11 +113,21 @@ class TripContextService {
   }
 
   Future<void> activateTrip(String tripId) async {
+    final activeSession = await _p2pSessionService?.getActiveSession();
+    if (activeSession != null &&
+        activeSession.tripId != tripId &&
+        activeSession.blocksTripSwitch) {
+      await _p2pSessionService?.stopActiveSession(reason: 'switch_trip');
+    }
     await _tripRepository.setActiveTrip(tripId);
     await ensureDefaultChannelAndChat(tripId);
   }
 
   Future<void> deactivateTrip(String tripId) async {
+    final activeSession = await _p2pSessionService?.getActiveSession();
+    if (activeSession?.tripId == tripId) {
+      await _p2pSessionService?.stopActiveSession(reason: 'deactivate_trip');
+    }
     final db = await _database.database;
     final now = DateTime.now().toIso8601String();
     await db.transaction((txn) async {
@@ -144,6 +159,7 @@ class TripContextService {
     String? customChannelCode,
     String? cloudGroupId,
     String? cloudGroupName,
+    bool activate = true,
   }) async {
     final identity = await _identityRepository.getCurrentIdentity();
     if (identity == null) {
@@ -154,6 +170,7 @@ class TripContextService {
             tripName: tripName,
             identity: identity,
             customChannelCode: customChannelCode,
+            activate: activate,
           )
         : await _tripRepository.createCloudBackupTrip(
             tripName: tripName,
@@ -201,6 +218,21 @@ class TripContextService {
       throw StateError('Joined channel was not activated.');
     }
     return context;
+  }
+
+  Future<TripSessionModel> joinOfflineChannelAsInactiveTrip(
+    String channelCode, {
+    String? tripName,
+  }) async {
+    final identity = await _requireIdentity();
+    final trip = await _tripRepository.joinOfflineTrip(
+      channelCode: channelCode,
+      identity: identity,
+      tripName: tripName,
+      activate: false,
+    );
+    await ensureDefaultChannelAndChat(trip.tripId);
+    return trip;
   }
 
   Future<ActiveTripContext> activateOfflineChannelAsTrip(
@@ -392,8 +424,13 @@ class TripContextService {
     return (await _channelRepository.getChannel(channel.channelId)) ?? channel;
   }
 
-  Future<void> archiveTrip(String tripId) =>
-      _tripRepository.archiveTrip(tripId);
+  Future<void> archiveTrip(String tripId) async {
+    final activeSession = await _p2pSessionService?.getActiveSession();
+    if (activeSession?.tripId == tripId) {
+      await _p2pSessionService?.stopActiveSession(reason: 'archive_trip');
+    }
+    await _tripRepository.archiveTrip(tripId);
+  }
 
   Future<void> _normalizeActiveTrips() async {
     final db = await _database.database;

@@ -63,7 +63,7 @@ void main() {
           File('lib/features/chat/presentation/chat_hub_screen.dart')
               .readAsStringSync();
 
-      expect(nearby, contains('activeUsableOfflineChannelProvider'));
+      expect(nearby, contains('activeTripContextProvider'));
       expect(connectivity, contains('activeUsableOfflineChannelProvider'));
       expect(
         connectivityController,

@@ -94,6 +94,10 @@ class NearbyRepository {
     return _transport.disconnectFromPeer(endpointId);
   }
 
+  Future<void> disconnectAllPeers() {
+    return _transport.disconnectAllPeers();
+  }
+
   Future<void> sendPacket({
     required String endpointId,
     required String packetJson,

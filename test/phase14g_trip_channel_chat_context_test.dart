@@ -9,11 +9,11 @@ import 'package:traillink/features/trip_context/data/models/chat_room_model.dart
 
 void main() {
   group('Phase 14G Trip -> Channel -> Chat architecture', () {
-    test('SQLite v20 migration declares trip context schema and chat ids', () {
+    test('SQLite migration declares trip context schema and chat ids', () {
       final source =
           File('lib/core/database/local_database.dart').readAsStringSync();
 
-      expect(source, contains('version: 20'));
+      expect(source, contains('version: 21'));
       expect(source, contains('active_channel_id'));
       expect(source, contains('last_opened_at'));
       expect(source, contains('trip_id'));

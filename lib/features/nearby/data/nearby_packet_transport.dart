@@ -20,6 +20,8 @@ abstract class NearbyPacketTransport {
 
   Future<void> disconnectFromPeer(String endpointId);
 
+  Future<void> disconnectAllPeers();
+
   Future<void> sendPacket({
     required String endpointId,
     required String packetJson,

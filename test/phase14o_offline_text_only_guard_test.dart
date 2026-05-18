@@ -19,8 +19,7 @@ void main() {
           .readAsStringSync();
       final actionsStart = source.indexOf('final textOnlyActions = [');
       final flagStart = source.indexOf('if (OfflineTextOnlyFlags.enabled)');
-      final flagEnd =
-          source.indexOf('return [\n    ...textOnlyActions', flagStart);
+      final flagEnd = source.indexOf('];', flagStart);
       final textOnlyActions = source.substring(actionsStart, flagStart);
       final textOnlyBlock = source.substring(flagStart, flagEnd);
 
@@ -130,8 +129,7 @@ void main() {
           File('lib/features/nearby/data/nearby_connections_transport.dart')
               .readAsStringSync();
       final lostStart = source.indexOf('onEndpointLost: (endpointId)');
-      final connectStart =
-          source.indexOf('@override\n  Future<void> connectToPeer');
+      final connectStart = source.indexOf('Future<void> connectToPeer');
       final lostBlock = source.substring(lostStart, connectStart);
 
       expect(
