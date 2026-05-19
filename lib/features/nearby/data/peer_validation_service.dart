@@ -35,9 +35,10 @@ class PeerValidationService {
       return PeerValidationResult.mismatch;
     }
     final tripId = peer.tripId;
-    if (tripId != null &&
+    final hasTripMismatch = tripId != null &&
         tripId.isNotEmpty &&
-        !_matchesCompact(context.trip.tripId, tripId)) {
+        !_matchesCompact(context.trip.tripId, tripId);
+    if (hasTripMismatch && !allowUnknownSameChannel) {
       return PeerValidationResult.mismatch;
     }
     final match = await _rosterRepository.findMatchingDevice(

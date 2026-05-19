@@ -92,7 +92,7 @@ class _JoinOfflineChannelScreenState
                 borderRadius: BorderRadius.circular(18),
               ),
               child: const Text(
-                'Channel membership will be verified with nearby devices in the peer discovery phase.',
+                'Channel membership will be checked when nearby phones connect.',
               ),
             ),
             const SizedBox(height: 16),

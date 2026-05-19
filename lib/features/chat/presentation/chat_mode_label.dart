@@ -18,8 +18,8 @@ class ChatModeLabel {
 
   static String offlineChatSubtitle(int connectedPeerCount) {
     final peers = connectedPeerCount == 1
-        ? '1 peer nearby'
-        : '$connectedPeerCount peers nearby';
+        ? '1 phone nearby'
+        : '$connectedPeerCount phones nearby';
     return 'Offline Chat - $peers';
   }
 }

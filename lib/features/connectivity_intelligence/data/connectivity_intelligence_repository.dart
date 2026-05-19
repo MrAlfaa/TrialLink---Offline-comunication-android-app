@@ -23,7 +23,7 @@ class ConnectivityIntelligenceSummary {
   final DateTime lastUpdatedAt;
 
   String get overallLabel {
-    if (qualities.isEmpty) return 'No peers';
+    if (qualities.isEmpty) return 'No phones';
     final best = qualities.first.qualityLabel.displayName;
     return best;
   }
@@ -176,7 +176,7 @@ class ConnectivityIntelligenceRepository {
           : 'Connection is usable. Stay within this range.';
     }
     if (label == 'fair') return 'Keep phones nearby and avoid obstacles.';
-    return 'Move closer to a teammate or restart discovery.';
+    return 'Move closer to a teammate or open Connect Phones again.';
   }
 }
 

@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/offline/offline_packet_router.dart';
 import '../../../core/mode/mode_controller.dart';
 import '../../../core/mode/mode_models.dart';
 import '../../../core/settings/settings_service.dart';
@@ -89,6 +92,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final state = ref.watch(locationControllerProvider(args));
     final controller = ref.read(locationControllerProvider(args).notifier);
     final modeState = ref.watch(modeControllerProvider);
+    ref.listen(offlinePacketRouterProvider, (_, next) {
+      final notice = next.lastNotice ?? '';
+      if (notice == 'Location update received.' ||
+          notice.contains('Location update received')) {
+        unawaited(controller.refresh());
+      }
+    });
     final sharingEnabled =
         ref.watch(_locationSharingEnabledProvider).asData?.value ?? true;
     final own = state.currentLocation;

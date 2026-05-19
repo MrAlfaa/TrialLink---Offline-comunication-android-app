@@ -28,7 +28,7 @@ class NearbyPeersScreen extends ConsumerWidget {
     final modeState = ref.watch(modeControllerProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Nearby Peers')),
+      appBar: AppBar(title: const Text('Connect Phones')),
       body: SafeArea(
         child: actor.when(
           data: (user) {
@@ -155,28 +155,28 @@ class NearbyPeersScreen extends ConsumerWidget {
                                 ? null
                                 : controller.startAdvertising,
                             icon: const Icon(Icons.campaign_rounded),
-                            label: const Text('Start Advertising'),
+                            label: const Text('Make my phone visible'),
                           ),
                           OutlinedButton.icon(
                             onPressed: state.isBusy || !state.isAdvertising
                                 ? null
                                 : controller.stopAdvertising,
                             icon: const Icon(Icons.stop_circle_rounded),
-                            label: const Text('Stop Advertising'),
+                            label: const Text('Hide my phone'),
                           ),
                           FilledButton.tonalIcon(
                             onPressed: state.isBusy || state.isDiscovering
                                 ? null
                                 : controller.startDiscovery,
                             icon: const Icon(Icons.radar_rounded),
-                            label: const Text('Start Discovery'),
+                            label: const Text('Find nearby phones'),
                           ),
                           OutlinedButton.icon(
                             onPressed: state.isBusy || !state.isDiscovering
                                 ? null
                                 : controller.stopDiscovery,
                             icon: const Icon(Icons.pause_circle_rounded),
-                            label: const Text('Stop Discovery'),
+                            label: const Text('Stop finding phones'),
                           ),
                         ],
                       ),
@@ -283,8 +283,8 @@ class _P2PStatusChip extends StatelessWidget {
         : switch (session?.state) {
             P2PSessionState.connected => 'Connected to current trip',
             P2PSessionState.connecting => 'Connecting',
-            P2PSessionState.advertising => 'Advertising',
-            P2PSessionState.discovering => 'Discovering',
+            P2PSessionState.advertising => 'Visible',
+            P2PSessionState.discovering => 'Finding phones',
             _ => 'Disconnected',
           };
     final color = connectedElsewhere
@@ -328,7 +328,7 @@ class _SessionMismatchWarning extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Current P2P session is for ${session.channelCode}. Disconnect it before using this trip.',
+              'Your nearby connection is for ${session.channelCode}. Disconnect it before using this trip.',
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -353,7 +353,7 @@ class _SessionMismatchWarning extends StatelessWidget {
 
 String _nearbyNoticeBody(String value) {
   if (value.contains('PlatformException')) {
-    return 'Nearby connection failed. Start discovery again and keep both phones close with Nearby open.';
+    return 'Nearby connection failed. Find phones again and keep both phones close with TrailLink open.';
   }
   return value;
 }
@@ -405,13 +405,13 @@ class _EmptyPeers extends StatelessWidget {
                 size: 46, color: AppColors.muted),
             const SizedBox(height: 10),
             Text(
-              'No nearby TrailLink users found on this channel.',
+              'No nearby phones found on this channel.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 6),
             Text(
-              'Start advertising and discovery on both phones using the same channel code.',
+              'Make one phone visible and tap Find nearby phones on the other phone using the same channel code.',
               textAlign: TextAlign.center,
               style: Theme.of(context)
                   .textTheme

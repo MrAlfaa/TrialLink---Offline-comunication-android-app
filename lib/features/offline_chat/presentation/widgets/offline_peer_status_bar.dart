@@ -35,8 +35,8 @@ class OfflinePeerStatusBar extends StatelessWidget {
           Expanded(
             child: Text(
               connected
-                  ? 'Connected to $connectedCount nearby peer${connectedCount == 1 ? "" : "s"}'
-                  : 'No connected peers. Messages will be queued.',
+                  ? 'Connected to $connectedCount nearby phone${connectedCount == 1 ? "" : "s"}'
+                  : 'No connected phones. Messages will wait to send.',
               style: TextStyle(
                 color: connected ? AppColors.success : AppColors.warning,
                 fontWeight: FontWeight.w700,

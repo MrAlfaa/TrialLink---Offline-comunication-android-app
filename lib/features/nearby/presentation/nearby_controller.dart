@@ -41,13 +41,13 @@ NearbyFailureKind nearbyFailureKind(Object error) {
 String nearbyUserMessageFromError(Object error) {
   switch (nearbyFailureKind(error)) {
     case NearbyFailureKind.staleEndpoint:
-      return 'That peer is no longer reachable. Start discovery again and ask the other phone to keep Nearby open.';
+      return 'That phone is no longer reachable. Find phones again and ask the other phone to keep TrailLink open.';
     case NearbyFailureKind.permission:
       return 'Nearby permissions are required. Turn on Bluetooth, Wi-Fi, and location access, then try again.';
     case NearbyFailureKind.transport:
-      return 'Nearby connection failed. Check Bluetooth, Wi-Fi, and Nearby discovery, then try again.';
+      return 'Nearby connection failed. Check Bluetooth, Wi-Fi, and location, then try again.';
     case NearbyFailureKind.unknown:
-      return 'Nearby action failed. Try discovery again and keep both phones close with Nearby open.';
+      return 'Nearby action failed. Keep both phones close and try again.';
   }
 }
 
@@ -208,7 +208,7 @@ class NearbyController extends StateNotifier<NearbyState> {
         appDeviceId: session['session_id']?.toString(),
         capabilities: const ['text', 'sos', 'location', 'ptt'],
       ),
-      successMessage: 'Advertising started.',
+      successMessage: 'Your phone is visible to this trip.',
       after: () async {
         await _p2pSessionService.startSessionForTrip(
           tripId: args.tripId,
@@ -217,6 +217,7 @@ class NearbyController extends StateNotifier<NearbyState> {
           state: P2PSessionState.advertising,
         );
         state = state.copyWith(isAdvertising: true);
+        await refreshPeers();
         _startHeartbeat();
       },
     );
@@ -225,7 +226,7 @@ class NearbyController extends StateNotifier<NearbyState> {
   Future<void> stopAdvertising() async {
     await _run(
       _repository.stopAdvertising,
-      successMessage: 'Advertising stopped.',
+      successMessage: 'Your phone is no longer visible.',
       after: () async {
         await _p2pSessionService.cleanupStalePeers();
         state = state.copyWith(isAdvertising: false);
@@ -238,7 +239,7 @@ class NearbyController extends StateNotifier<NearbyState> {
     if (!await requestPermissions()) return;
     await _run(
       () => _repository.startDiscovery(args.channel.channelCode),
-      successMessage: 'Discovery started.',
+      successMessage: 'Looking for nearby phones.',
       after: () async {
         await _p2pSessionService.startSessionForTrip(
           tripId: args.tripId,
@@ -250,6 +251,7 @@ class NearbyController extends StateNotifier<NearbyState> {
           isDiscovering: true,
           lastScanAt: DateTime.now(),
         );
+        await refreshPeers();
         _startHeartbeat();
       },
     );
@@ -258,7 +260,7 @@ class NearbyController extends StateNotifier<NearbyState> {
   Future<void> stopDiscovery() async {
     await _run(
       _repository.stopDiscovery,
-      successMessage: 'Discovery stopped.',
+      successMessage: 'Stopped looking for phones.',
       after: () async {
         await _p2pSessionService.cleanupStalePeers();
         state = state.copyWith(isDiscovering: false);
@@ -290,7 +292,7 @@ class NearbyController extends StateNotifier<NearbyState> {
   Future<void> disconnectFromPeer(String endpointId) async {
     await _run(
       () => _repository.disconnectFromPeer(endpointId),
-      successMessage: 'Peer disconnected.',
+      successMessage: 'Phone disconnected.',
       after: () async {
         await _p2pSessionService.markPeerDisconnected(endpointId);
         _setPeerStatus(endpointId, PeerConnectionStatus.disconnected);
@@ -301,10 +303,11 @@ class NearbyController extends StateNotifier<NearbyState> {
   Future<void> _onPeer(NearbyPeerModel peer) async {
     if (peer.activeChannelCode != args.channel.channelCode) return;
     final trip = await _activeTripFromArgs();
+    final allowUnknown = await _allowUnknownSameChannel(trip);
     final validation = await _peerValidationService.validatePeer(
       context: ActiveTripContext(trip: trip, activeChannel: args.channel),
       peer: peer,
-      allowUnknownSameChannel: false,
+      allowUnknownSameChannel: allowUnknown,
     );
     if (validation == PeerValidationResult.mismatch) return;
     final validatedPeer = peer.copyWith(
@@ -327,6 +330,7 @@ class NearbyController extends StateNotifier<NearbyState> {
     ]..sort((a, b) => b.lastSeenAt.compareTo(a.lastSeenAt));
     if (!mounted) return;
     state = state.copyWith(peers: peers, lastScanAt: DateTime.now());
+    await refreshPeers();
   }
 
   Future<TripSessionModel> _activeTripFromArgs() async {
@@ -339,6 +343,15 @@ class NearbyController extends StateNotifier<NearbyState> {
     );
     if (rows.isEmpty) throw StateError('Active trip not found for Nearby.');
     return TripSessionModel.fromDb(rows.first);
+  }
+
+  Future<bool> _allowUnknownSameChannel(TripSessionModel trip) async {
+    final policy = await LocalDatabase.instance.readSetting(
+      'peer_validation_policy_${trip.tripId}',
+    );
+    if (policy == 'known_members_only') return false;
+    if (trip.offlineBackupReady) return false;
+    return true;
   }
 
   void _startHeartbeat() {

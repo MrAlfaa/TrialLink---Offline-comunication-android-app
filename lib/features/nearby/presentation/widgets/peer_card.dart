@@ -30,7 +30,7 @@ class PeerCard extends StatelessWidget {
         : connecting
             ? 'Connecting...'
             : peer.status == PeerConnectionStatus.lost
-                ? 'Rediscover peer'
+                ? 'Find phone again'
                 : 'Connect';
     return Card(
       child: Padding(
@@ -126,7 +126,7 @@ String _validationLabel(String status) {
     'verified_member' => 'Verified member',
     'cached_member' => 'Cached member',
     'mismatch' => 'Trip mismatch',
-    _ => 'Unknown peer',
+    _ => 'Unknown phone',
   };
 }
 

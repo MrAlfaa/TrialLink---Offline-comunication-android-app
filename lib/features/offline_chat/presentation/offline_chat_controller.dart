@@ -140,8 +140,8 @@ class OfflineChatController extends StateNotifier<OfflineChatState> {
       state = state.copyWith(
         isSending: false,
         infoMessage: hasPeers
-            ? 'Message sent to nearby peers.'
-            : 'Message saved. It will be sent when a peer connects.',
+            ? 'Message sent to nearby phones.'
+            : 'Message saved. It will send when a phone connects.',
       );
     } catch (error) {
       state = state.copyWith(

@@ -12,8 +12,8 @@ class NetworkHealthCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bestPeer = summary.qualities.isEmpty
-        ? 'No peer'
-        : summary.qualities.first.displayName ?? 'Nearby peer';
+        ? 'No phone'
+        : summary.qualities.first.displayName ?? 'Nearby phone';
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -34,8 +34,8 @@ class NetworkHealthCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            Text('Best peer: $bestPeer'),
-            Text('Queued offline packets: ${summary.pendingOfflineMessages}'),
+            Text('Best phone: $bestPeer'),
+            Text('Waiting messages: ${summary.pendingOfflineMessages}'),
             Text('Updated ${DateFormat.jm().format(summary.lastUpdatedAt)}'),
           ],
         ),

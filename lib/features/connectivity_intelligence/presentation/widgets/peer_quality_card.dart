@@ -28,7 +28,7 @@ class PeerQualityCard extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    peer.displayName ?? 'Nearby peer',
+                    peer.displayName ?? 'Nearby phone',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w800,
                         ),

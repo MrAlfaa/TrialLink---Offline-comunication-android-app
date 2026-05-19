@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/mode/mode_controller.dart';
+import '../../../core/offline/offline_packet_router.dart';
 import '../../../core/settings/settings_service.dart';
 import '../../../shared/widgets/compact_status_chip.dart';
 import '../../../shared/widgets/mode_status_widgets.dart';
@@ -50,6 +53,15 @@ class _SosScreenState extends ConsumerState<SosScreen> {
     final state = ref.watch(emergencyControllerProvider(args));
     final controller = ref.read(emergencyControllerProvider(args).notifier);
     final modeState = ref.watch(modeControllerProvider);
+    ref.listen(offlinePacketRouterProvider, (_, next) {
+      final notice = next.lastNotice ?? '';
+      if (notice == 'Emergency alert received.' ||
+          notice == 'Emergency alert acknowledged.' ||
+          notice.contains('Emergency alert received') ||
+          notice.contains('Emergency alert acknowledged')) {
+        unawaited(controller.refresh());
+      }
+    });
     final policy = ref.watch(_sosPolicyProvider).asData?.value ??
         const _SosPolicy(enabled: true, attachLocation: true);
 

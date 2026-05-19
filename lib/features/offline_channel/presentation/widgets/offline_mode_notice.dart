@@ -20,7 +20,7 @@ class OfflineModeNotice extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Offline channels work like walkie-talkie codes. Users who enter the same channel code can communicate when nearby device discovery is available.',
+              'Offline channels work like walkie-talkie codes. Teammates who enter the same channel code can communicate when their phones are nearby.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
           ),

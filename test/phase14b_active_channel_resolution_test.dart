@@ -102,7 +102,10 @@ void main() {
       expect(source, contains('OfflineChatRouteResolverScreen'));
       expect(source, contains('resolveOfflineChatContext'));
       expect(source, contains('resolveDefaultOfflineChatRoute'));
-      expect(source, contains('No peers connected. Messages will be queued.'));
+      expect(
+        source,
+        contains('No phones connected. Messages will wait to send.'),
+      );
       expect(source, contains('offline-chat-context-error'));
     });
 
@@ -209,7 +212,8 @@ void main() {
                     OfflineChatInputBar(
                       onSend: (_) {},
                       isSending: false,
-                      queueHint: 'No peers connected. Messages will be queued.',
+                      queueHint:
+                          'No phones connected. Messages will wait to send.',
                     ),
                   ],
                 ),
@@ -255,14 +259,14 @@ void main() {
             body: OfflineChatInputBar(
               onSend: (value) => sentText = value,
               isSending: false,
-              queueHint: 'No peers connected. Messages will be queued.',
+              queueHint: 'No phones connected. Messages will wait to send.',
             ),
           ),
         ),
       );
 
       expect(
-        find.text('No peers connected. Messages will be queued.'),
+        find.text('No phones connected. Messages will wait to send.'),
         findsOneWidget,
       );
       expect(

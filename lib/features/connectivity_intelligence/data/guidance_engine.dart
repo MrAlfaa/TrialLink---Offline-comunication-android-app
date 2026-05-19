@@ -27,8 +27,8 @@ class GuidanceEngine {
         channelCode: channelCode,
         guidanceType: pendingOfflineMessages > 0 ? 'reconnect' : 'no_peers',
         message: pendingOfflineMessages > 0
-            ? 'Messages are queued. Reconnect with a nearby peer to forward them.'
-            : 'No nearby peers found. Move closer to your group or start discovery.',
+            ? 'Messages are waiting to send. Reconnect with a nearby phone to forward them.'
+            : 'No nearby phones found. Move closer to your group or open Connect Phones.',
         createdAt: now,
       );
     }
@@ -36,7 +36,7 @@ class GuidanceEngine {
     final sorted = [...peers]
       ..sort((a, b) => b.qualityScore.compareTo(a.qualityScore));
     final best = sorted.first;
-    final name = best.displayName ?? 'this peer';
+    final name = best.displayName ?? 'this phone';
 
     if (emergencyActive &&
         (best.qualityLabel == SignalQualityLabel.weak ||
@@ -47,7 +47,7 @@ class GuidanceEngine {
         relatedEndpointId: best.endpointId,
         guidanceType: 'move_closer',
         message:
-            'Emergency alert not confirmed. Move toward a stronger peer connection if possible.',
+            'Emergency alert not confirmed. Move toward a stronger phone connection if possible.',
         createdAt: now,
       );
     }

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/connectivity/connection_mode_provider.dart';
-import '../../core/config/offline_text_only_flags.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/identity/auth_access_controller.dart';
@@ -375,7 +374,7 @@ class _DashboardHeroCard extends StatelessWidget {
     final syncLabel = modeState.effectiveMode == EffectiveMode.online
         ? modeState.backendReachable
             ? 'Ready'
-            : 'Queued'
+            : 'Waiting to send'
         : 'Paused';
 
     return Container(
@@ -763,7 +762,7 @@ List<_ActionSpec> _actionsFor({
     ];
   }
 
-  final textOnlyActions = [
+  final offlineActions = [
     _ActionSpec(
       'Channels',
       'Offline channel setup',
@@ -781,50 +780,32 @@ List<_ActionSpec> _actionsFor({
       () => context.go('/chat?tab=offline'),
     ),
     _ActionSpec(
-      'Nearby Peers',
-      'Discover connected phones',
+      'Connect phones',
+      'Find teammates on this channel',
       Icons.radar_rounded,
       AppColors.signalOrange,
       'nearby_discovery',
       () => context.go('/nearby-peers'),
     ),
-  ];
-
-  if (OfflineTextOnlyFlags.enabled) {
-    return [
-      ...textOnlyActions,
-      _ActionSpec(
-        'Compass',
-        'Connection guidance',
-        Icons.explore_rounded,
-        AppColors.deepForest,
-        'connectivity_compass',
-        () => context.go('/connectivity'),
-      ),
-    ];
-  }
-
-  return [
-    ...textOnlyActions,
     _ActionSpec(
-      'SOS',
-      'Broadcast emergency alert',
+      'Send SOS',
+      'Alert teammates for help',
       Icons.emergency_share_rounded,
       AppColors.danger,
       'offline_sos',
       () => context.go('/sos'),
     ),
     _ActionSpec(
-      'Location',
-      'Share local position safely',
+      'Share location',
+      'Send your latest position',
       Icons.location_on_rounded,
       AppColors.success,
       'offline_location_share',
       () => context.go('/map'),
     ),
     _ActionSpec(
-      'PTT',
-      'Voice-note and live radio',
+      'Talk',
+      'Voice notes and live radio',
       Icons.record_voice_over_rounded,
       AppColors.signalOrange,
       'voice_note_ptt',
@@ -839,6 +820,8 @@ List<_ActionSpec> _actionsFor({
       () => context.go('/connectivity'),
     ),
   ];
+
+  return offlineActions;
 }
 
 String _modeChipLabel(ModeState state) {

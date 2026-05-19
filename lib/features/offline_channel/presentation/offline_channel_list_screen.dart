@@ -71,7 +71,7 @@ class OfflineChannelListScreen extends ConsumerWidget {
               OutlinedButton.icon(
                 onPressed: () => context.go('/nearby-peers'),
                 icon: const Icon(Icons.radar_rounded),
-                label: const Text('Nearby Peers'),
+                label: const Text('Connect Phones'),
               ),
               const SizedBox(height: 16),
               channelsValue.when(

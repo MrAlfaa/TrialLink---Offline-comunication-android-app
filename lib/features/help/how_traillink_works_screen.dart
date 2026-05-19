@@ -11,7 +11,7 @@ class HowTrailLinkWorksScreen extends StatelessWidget {
       (
         Icons.hiking_rounded,
         'Start or join a trip',
-        'A trip connects messages, SOS, map, nearby peers, and walkie-talkie tools in one place.',
+        'A trip connects messages, SOS, map, nearby phones, and walkie-talkie tools in one place.',
       ),
       (
         Icons.cloud_done_rounded,
@@ -21,7 +21,7 @@ class HowTrailLinkWorksScreen extends StatelessWidget {
       (
         Icons.hub_rounded,
         'Offline mode uses nearby phones and channel code',
-        'In remote areas, teammates use the same offline channel code and nearby discovery.',
+        'In remote areas, teammates use the same offline channel code and connect phones nearby.',
       ),
       (
         Icons.sos_rounded,

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/config/offline_text_only_flags.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/mode/mode_models.dart';
 import 'mode_center_button.dart';
@@ -24,8 +23,6 @@ class TrailBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final offlineTextOnly =
-        OfflineTextOnlyFlags.enabled && effectiveMode == EffectiveMode.offline;
     return SafeArea(
       top: false,
       child: SizedBox(
@@ -69,34 +66,25 @@ class TrailBottomNav extends StatelessWidget {
                       onTap: () => context.go('/chat'),
                     ),
                     const SizedBox(width: 64),
-                    if (offlineTextOnly) ...[
-                      _NavItem(
-                        label: 'Nearby',
-                        icon: Icons.radar_rounded,
-                        selected: _matches('/nearby-peers'),
-                        onTap: () => context.go('/nearby-peers'),
-                      ),
-                      _NavItem(
-                        label: 'Channels',
-                        icon: Icons.hub_rounded,
-                        selected: _matches('/offline-channel'),
-                        onTap: () => context.go('/offline-channel'),
-                      ),
-                    ] else ...[
-                      _NavItem(
-                        label: 'Map',
-                        icon: Icons.map_rounded,
-                        selected: _matches('/map') || location.contains('/map'),
-                        onTap: () => context.go('/map'),
-                      ),
-                      _NavItem(
-                        label: 'SOS',
-                        icon: Icons.sos_rounded,
-                        selected: _matches('/sos') || location.contains('/sos'),
-                        color: AppColors.danger,
-                        onTap: () => context.go('/sos'),
-                      ),
-                    ],
+                    _NavItem(
+                      label: 'Connect',
+                      icon: Icons.radar_rounded,
+                      selected: _matches('/nearby-peers'),
+                      onTap: () => context.go('/nearby-peers'),
+                    ),
+                    _NavItem(
+                      label: 'Map',
+                      icon: Icons.map_rounded,
+                      selected: _matches('/map') || location.contains('/map'),
+                      onTap: () => context.go('/map'),
+                    ),
+                    _NavItem(
+                      label: 'SOS',
+                      icon: Icons.sos_rounded,
+                      selected: _matches('/sos') || location.contains('/sos'),
+                      color: AppColors.danger,
+                      onTap: () => context.go('/sos'),
+                    ),
                   ],
                 ),
               ),

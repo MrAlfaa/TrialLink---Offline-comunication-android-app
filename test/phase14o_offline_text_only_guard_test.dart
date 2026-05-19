@@ -3,61 +3,56 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('Phase 14O final offline text-only guard', () {
-    test('offline text-only flag is enabled with clear user wording', () {
+  group('Phase 14O/14P offline safety tool contracts', () {
+    test('offline text-only flag is disabled for restored safety tools', () {
       final source = File('lib/core/config/offline_text_only_flags.dart')
           .readAsStringSync();
 
-      expect(source, contains('static const bool enabled = true'));
-      expect(source, contains('nearby text chat'));
-      expect(source, contains('Offline PTT, SOS, location sharing'));
+      expect(source, contains('static const bool enabled = false'));
+      expect(source, contains('Offline chat'));
+      expect(source, contains('map, SOS, voice notes'));
       expect(source, contains('Live Radio'));
     });
 
-    test('offline dashboard exposes chat, channels, and nearby only', () {
+    test('offline dashboard exposes chat, connection, map, SOS, and talk', () {
       final source = File('lib/features/dashboard/dashboard_screen.dart')
           .readAsStringSync();
-      final actionsStart = source.indexOf('final textOnlyActions = [');
-      final flagStart = source.indexOf('if (OfflineTextOnlyFlags.enabled)');
-      final flagEnd = source.indexOf('];', flagStart);
-      final textOnlyActions = source.substring(actionsStart, flagStart);
-      final textOnlyBlock = source.substring(flagStart, flagEnd);
 
-      expect(source, contains('OfflineTextOnlyFlags.enabled'));
-      expect(textOnlyActions, contains("'Channels'"));
-      expect(textOnlyActions, contains("'Offline Chat'"));
-      expect(textOnlyActions, contains("'Nearby Peers'"));
-      expect(textOnlyActions, isNot(contains("'SOS'")));
-      expect(textOnlyActions, isNot(contains("'Location'")));
-      expect(textOnlyActions, isNot(contains("'PTT'")));
-      expect(textOnlyBlock, isNot(contains("'SOS'")));
-      expect(textOnlyBlock, isNot(contains("'Location'")));
-      expect(textOnlyBlock, isNot(contains("'PTT'")));
-      expect(textOnlyBlock, isNot(contains('voice_note_ptt')));
-      expect(textOnlyBlock, isNot(contains('offline_sos')));
-      expect(textOnlyBlock, isNot(contains('offline_location_share')));
+      expect(source, isNot(contains('OfflineTextOnlyFlags.enabled')));
+      expect(source, contains("'Channels'"));
+      expect(source, contains("'Offline Chat'"));
+      expect(source, contains("'Connect phones'"));
+      expect(source, contains("'Send SOS'"));
+      expect(source, contains("'Share location'"));
+      expect(source, contains("'Talk'"));
+      expect(source, contains('voice_note_ptt'));
+      expect(source, contains('offline_sos'));
+      expect(source, contains('offline_location_share'));
     });
 
-    test('offline bottom nav swaps map and sos for nearby and channels', () {
+    test('bottom nav stays stable for all modes', () {
       final source =
           File('lib/shared/widgets/trail_bottom_nav.dart').readAsStringSync();
 
-      expect(source, contains('OfflineTextOnlyFlags.enabled'));
-      expect(source, contains('effectiveMode == EffectiveMode.offline'));
-      expect(source, contains("label: 'Nearby'"));
+      expect(source, isNot(contains('OfflineTextOnlyFlags.enabled')));
+      expect(source, contains("label: 'Home'"));
+      expect(source, contains("label: 'Messages'"));
+      expect(source, contains("label: 'Connect'"));
       expect(source, contains("context.go('/nearby-peers')"));
-      expect(source, contains("label: 'Channels'"));
-      expect(source, contains("context.go('/offline-channel')"));
+      expect(source, contains("label: 'Map'"));
+      expect(source, contains("label: 'SOS'"));
+      expect(source, isNot(contains("label: 'Channels'")));
     });
 
-    test('offline routes are guarded while online map and sos remain available',
-        () {
+    test('offline map, SOS, and PTT routes open real screens', () {
       final source = File('lib/app/router.dart').readAsStringSync();
 
-      expect(source, contains('_offlineTextOnlyActive(ref)'));
-      expect(source, contains("featureName: 'Offline SOS'"));
-      expect(source, contains("featureName: 'Offline Location'"));
-      expect(source, contains("featureName: 'Offline PTT'"));
+      expect(source, isNot(contains('_offlineTextOnlyActive(ref)')));
+      expect(source, isNot(contains('OfflineFeatureDisabledScreen')));
+      expect(source, contains('SosScreen('));
+      expect(source, contains('MapScreen('));
+      expect(source, contains('PttScreen('));
+      expect(source, contains('offlineChannelId:'));
       expect(source, contains('const SosScreen()'));
       expect(source, contains('MapScreen(focus: MapFocus.fromExtra'));
     });

@@ -84,7 +84,7 @@ class SyncStatusChip extends StatelessWidget {
       label: switch (status) {
         SyncChipStatus.ready => 'Sync ready',
         SyncChipStatus.paused => 'Sync paused',
-        SyncChipStatus.queued => 'Queued',
+        SyncChipStatus.queued => 'Waiting to send',
         SyncChipStatus.savedLocal => 'Saved locally',
       },
       color: switch (status) {
@@ -118,9 +118,9 @@ class PeerStatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return CompactStatusChip(
       label: switch (count) {
-        0 => 'No peers',
-        1 => '1 peer',
-        _ => '$count peers',
+        0 => 'No phones',
+        1 => '1 phone',
+        _ => '$count phones',
       },
       color: count > 0 ? AppColors.success : AppColors.muted,
       icon: count > 0

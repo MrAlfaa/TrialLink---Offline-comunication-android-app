@@ -798,7 +798,7 @@ class _AppLockPrivacySettingsScreenState
               'biometric_unlock_enabled',
               'Use device fingerprint / phone PIN',
             ),
-            _boolTile('trail_pin_enabled', 'Use TrailLink PIN fallback'),
+            _boolTile('trail_pin_enabled', 'Use TrailLink backup PIN'),
             SettingsDropdownTile<String>(
               title: 'Auto-lock after',
               value: _timeout,
@@ -1011,7 +1011,7 @@ class _VoicePttSettingsScreenState
             ),
             _boolTile(
               'live_radio_fallback_to_voice_note',
-              'Fallback to voice-note if weak',
+              'Use voice note if Live Radio is weak',
             ),
           ],
         ),
@@ -1042,7 +1042,7 @@ class _VoicePttSettingsScreenState
                 builder: (context) => AlertDialog(
                   title: const Text('Enable Live Radio Experimental?'),
                   content: const Text(
-                    'Live Radio is offline-only and experimental. It should be used only with connected peers and a good connection.',
+                    'Live Radio is offline-only and experimental. It should be used only when phones are connected and the connection is good.',
                   ),
                   actions: [
                     TextButton(
@@ -1195,7 +1195,7 @@ class _AgreementPrivacySettingsScreenState
         SettingsSectionCard(
           title: 'Safety & Privacy Agreement',
           subtitle:
-              'TrailLink uses location, nearby discovery, microphone recording, and local storage based on your settings and permissions.',
+              'TrailLink uses location, nearby phone connection, microphone recording, and local storage based on your settings and permissions.',
           icon: Icons.verified_user_rounded,
           children: [
             SettingsToggleTile(
@@ -1563,7 +1563,7 @@ const _featureItems = [
       group: 'offline'),
   _FeatureToggle(
     key: 'enable_nearby_discovery',
-    title: 'Nearby Peer Discovery',
+    title: 'Connect Nearby Phones',
     group: 'offline',
   ),
   _FeatureToggle(

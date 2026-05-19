@@ -405,7 +405,7 @@ class _OverviewTab extends StatelessWidget {
                 OutlinedButton.icon(
                   onPressed: isEnded ? null : () => context.go('/nearby-peers'),
                   icon: const Icon(Icons.radar_rounded),
-                  label: const Text('Start / Stop Discovery'),
+                  label: const Text('Connect Phones'),
                 ),
               ],
             ),

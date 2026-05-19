@@ -204,7 +204,7 @@ class OfflineChannelRepository {
       channelCode: normalized,
       channelName: 'Offline Channel $normalized',
       description:
-          'Channel membership will be verified with nearby devices in the peer discovery phase.',
+          'Channel membership will be checked when nearby phones connect.',
       createdByUserId: actor.userId,
       createdByName: actor.displayName,
       isActive: activate,

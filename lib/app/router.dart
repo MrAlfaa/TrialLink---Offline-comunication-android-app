@@ -3,11 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/config/env_config.dart';
-import '../core/config/offline_text_only_flags.dart';
 import '../core/identity/auth_access_controller.dart';
 import '../core/identity/auth_access_state.dart';
 import '../core/mode/mode_controller.dart';
-import '../core/mode/mode_models.dart';
 import '../features/account_link/link_offline_data_screen.dart';
 import '../features/app_lock/data/models/app_lock_status.dart';
 import '../features/app_lock/presentation/app_lock_controller.dart';
@@ -43,7 +41,6 @@ import '../features/offline_channel/presentation/offline_channel_list_screen.dar
 import '../features/offline_chat/presentation/offline_chat_screen.dart';
 import '../features/nearby/presentation/nearby_peers_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
-import '../features/placeholders/offline_feature_disabled_screen.dart';
 import '../features/ptt/presentation/ptt_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/setup/presentation/setup_screens.dart';
@@ -438,10 +435,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     path: 'sos',
                     pageBuilder: (context, state) => _slidePage(
                       state,
-                      const OfflineFeatureDisabledScreen(
-                        featureName: 'Offline SOS',
-                        icon: Icons.sos_rounded,
-                        message: OfflineTextOnlyFlags.disabledMessage,
+                      SosScreen(
+                        offlineChannelId: state.pathParameters['channelId']!,
                       ),
                     ),
                   ),
@@ -449,10 +444,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     path: 'map',
                     pageBuilder: (context, state) => _slidePage(
                       state,
-                      const OfflineFeatureDisabledScreen(
-                        featureName: 'Offline Location',
-                        icon: Icons.location_on_rounded,
-                        message: OfflineTextOnlyFlags.disabledMessage,
+                      MapScreen(
+                        offlineChannelId: state.pathParameters['channelId']!,
                       ),
                     ),
                   ),
@@ -460,10 +453,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     path: 'ptt',
                     pageBuilder: (context, state) => _slidePage(
                       state,
-                      const OfflineFeatureDisabledScreen(
-                        featureName: 'Offline PTT',
-                        icon: Icons.record_voice_over_rounded,
-                        message: OfflineTextOnlyFlags.disabledMessage,
+                      PttScreen(
+                        offlineChannelId: state.pathParameters['channelId']!,
                       ),
                     ),
                   ),
@@ -503,39 +494,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/sos',
-            pageBuilder: (context, state) {
-              if (_offlineTextOnlyActive(ref)) {
-                return _fadePage(
-                  state,
-                  const OfflineFeatureDisabledScreen(
-                    featureName: 'Offline SOS',
-                    icon: Icons.sos_rounded,
-                  ),
-                );
-              }
-              return _fadePage(
-                state,
-                const SosScreen(),
-              );
-            },
+            pageBuilder: (context, state) => _fadePage(
+              state,
+              const SosScreen(),
+            ),
           ),
           GoRoute(
             path: '/map',
-            pageBuilder: (context, state) {
-              if (_offlineTextOnlyActive(ref)) {
-                return _fadePage(
-                  state,
-                  const OfflineFeatureDisabledScreen(
-                    featureName: 'Offline Location',
-                    icon: Icons.location_on_rounded,
-                  ),
-                );
-              }
-              return _fadePage(
-                state,
-                MapScreen(focus: MapFocus.fromExtra(state.extra)),
-              );
-            },
+            pageBuilder: (context, state) => _fadePage(
+              state,
+              MapScreen(focus: MapFocus.fromExtra(state.extra)),
+            ),
           ),
           GoRoute(
             path: '/emergency-history',
@@ -658,11 +627,6 @@ final _appRouterRefreshProvider = Provider<Listenable>((ref) {
 
 class _RouterRefreshNotifier extends ChangeNotifier {
   void refresh() => notifyListeners();
-}
-
-bool _offlineTextOnlyActive(Ref ref) {
-  return OfflineTextOnlyFlags.enabled &&
-      ref.read(modeControllerProvider).effectiveMode == EffectiveMode.offline;
 }
 
 bool isOnlineOnlyRoute(String location) {

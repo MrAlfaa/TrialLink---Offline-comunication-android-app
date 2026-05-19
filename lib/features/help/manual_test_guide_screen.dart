@@ -29,17 +29,17 @@ class ManualTestGuideScreen extends StatelessWidget {
         [
           'Start Offline Only trip.',
           'Copy the offline channel code.',
-          'Confirm Offline Chat, Nearby Peers, SOS, Map, and Walkie-talkie are available.',
+          'Confirm Offline Chat, Connect Phones, SOS, Map, and Walkie-talkie are available.',
         ],
       ),
       (
-        'Two-device P2P test',
+        'Two-phone connection test',
         [
           'Device A: Start Offline-Only Trip.',
           'Device A: Copy channel code.',
-          'Device A: Open Nearby Peers and start discovery/advertising.',
+          'Device A: Open Connect Phones and make the phone visible.',
           'Device B: Join Existing Trip with Device A channel code.',
-          'Device B: Open Nearby Peers and connect to Device A.',
+          'Device B: Open Connect Phones and find Device A.',
           'Test offline chat, SOS, location, and PTT.',
         ],
       ),
@@ -48,7 +48,7 @@ class ManualTestGuideScreen extends StatelessWidget {
         [
           'Switch Auto, Online, and Offline.',
           'Confirm trip tools remain visible.',
-          'Confirm pending local data stays queued when offline.',
+          'Confirm pending local data waits to send when offline.',
         ],
       ),
       (
