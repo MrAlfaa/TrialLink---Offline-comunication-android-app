@@ -3,8 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../offline_channel/data/models/offline_channel_model.dart';
+import '../../p2p_session/data/p2p_session_guard.dart';
+import '../../p2p_session/data/p2p_session_service.dart';
+import '../../p2p_session/presentation/p2p_session_switch_dialog.dart';
 import '../../trip/data/trip_session_model.dart';
 import '../data/trip_context_service.dart';
+import '../data/trip_member_device_roster_repository.dart';
 
 class TripManagementScreen extends ConsumerWidget {
   const TripManagementScreen({super.key});
@@ -93,6 +97,44 @@ class _TripManagementCard extends ConsumerWidget {
               ].join('  |  '),
               style: Theme.of(context).textTheme.bodySmall,
             ),
+            const SizedBox(height: 10),
+            FutureBuilder<(int, int)>(
+              future: _rosterCounts(ref, trip.tripId),
+              builder: (context, snapshot) {
+                final counts = snapshot.data ?? (0, 0);
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _StatusChip(
+                      label: trip.cloudGroupId == null
+                          ? 'Cloud not linked'
+                          : 'Cloud ready',
+                      active: trip.cloudGroupId != null,
+                    ),
+                    _StatusChip(
+                      label: trip.offlineBackupReady
+                          ? 'Offline backup ready'
+                          : 'Offline backup missing',
+                      active: trip.offlineBackupReady,
+                    ),
+                    if ((trip.channelCode ?? '').isNotEmpty)
+                      _StatusChip(
+                        label: 'Channel code ${trip.channelCode}',
+                        active: true,
+                      ),
+                    _StatusChip(
+                      label: 'Members cached ${counts.$1}',
+                      active: counts.$1 > 0,
+                    ),
+                    _StatusChip(
+                      label: 'Devices cached ${counts.$2}',
+                      active: counts.$2 > 0,
+                    ),
+                  ],
+                );
+              },
+            ),
             const SizedBox(height: 12),
             FutureBuilder<List<OfflineChannelModel>>(
               future: service.getChannelsForTrip(trip.tripId),
@@ -124,6 +166,24 @@ class _TripManagementCard extends ConsumerWidget {
                             ? const Text('Active')
                             : TextButton(
                                 onPressed: () async {
+                                  final action = await _resolveTripSwitchAction(
+                                    context,
+                                    ref,
+                                    trip,
+                                    allowCreateInactive: false,
+                                  );
+                                  if (action == P2PSessionSwitchAction.cancel) {
+                                    return;
+                                  }
+                                  if (action ==
+                                      P2PSessionSwitchAction
+                                          .disconnectAndSwitch) {
+                                    await ref
+                                        .read(p2pSessionGuardProvider)
+                                        .disconnectActiveSession(
+                                          reason: 'switch_trip',
+                                        );
+                                  }
                                   await service
                                       .switchActiveChannel(channel.channelId);
                                   ref.invalidate(activeTripContextProvider);
@@ -144,6 +204,23 @@ class _TripManagementCard extends ConsumerWidget {
                   onPressed: trip.isActive
                       ? null
                       : () async {
+                          final action = await _resolveTripSwitchAction(
+                            context,
+                            ref,
+                            trip,
+                            allowCreateInactive: false,
+                          );
+                          if (action == P2PSessionSwitchAction.cancel) {
+                            return;
+                          }
+                          if (action ==
+                              P2PSessionSwitchAction.disconnectAndSwitch) {
+                            await ref
+                                .read(p2pSessionGuardProvider)
+                                .disconnectActiveSession(
+                                  reason: 'switch_trip',
+                                );
+                          }
                           await service.activateTrip(trip.tripId);
                           ref.invalidate(activeTripContextProvider);
                         },
@@ -154,6 +231,16 @@ class _TripManagementCard extends ConsumerWidget {
                   onPressed: trip.status == 'archived'
                       ? null
                       : () async {
+                          final session = await ref
+                              .read(p2pSessionServiceProvider)
+                              .getActiveSession();
+                          if (session?.tripId == trip.tripId) {
+                            await ref
+                                .read(p2pSessionGuardProvider)
+                                .disconnectActiveSession(
+                                  reason: 'archive_trip',
+                                );
+                          }
                           await service.archiveTrip(trip.tripId);
                           ref.invalidate(activeTripContextProvider);
                         },
@@ -172,6 +259,27 @@ class _TripManagementCard extends ConsumerWidget {
       ),
     );
   }
+}
+
+Future<P2PSessionSwitchAction> _resolveTripSwitchAction(
+  BuildContext context,
+  WidgetRef ref,
+  TripSessionModel trip, {
+  required bool allowCreateInactive,
+}) async {
+  final session = await ref.read(p2pSessionServiceProvider).getActiveSession();
+  if (session == null ||
+      !session.blocksTripSwitch ||
+      session.tripId == trip.tripId) {
+    return P2PSessionSwitchAction.disconnectAndSwitch;
+  }
+  if (!context.mounted) return P2PSessionSwitchAction.cancel;
+  return showP2PSessionSwitchDialog(
+    context: context,
+    currentTripName: session.channelCode,
+    newTripName: trip.tripName,
+    allowCreateInactive: allowCreateInactive,
+  );
 }
 
 class _StatusChip extends StatelessWidget {
@@ -216,6 +324,13 @@ class _EmptyTripsState extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<(int, int)> _rosterCounts(WidgetRef ref, String tripId) async {
+  final repository = ref.read(tripMemberDeviceRosterRepositoryProvider);
+  final members = await repository.countMembers(tripId);
+  final devices = await repository.countDevices(tripId);
+  return (members, devices);
 }
 
 Future<void> _showCreateChannelDialog(

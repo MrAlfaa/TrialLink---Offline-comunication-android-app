@@ -35,7 +35,7 @@ class NearbyPermissionService {
       return const NearbyPermissionState(
         granted: true,
         readiness: NearbyPermissionReadiness.optional,
-        message: 'Nearby offline discovery is available on Android devices.',
+        message: 'Nearby phone connection is available on Android devices.',
       );
     }
 
@@ -99,7 +99,7 @@ class NearbyPermissionService {
       return const NearbyPermissionState(
         granted: false,
         readiness: NearbyPermissionReadiness.missing,
-        message: 'Please turn on Location services for Nearby discovery.',
+        message: 'Please turn on Location services to find nearby phones.',
       );
     }
 

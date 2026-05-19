@@ -109,7 +109,7 @@ class _ModeBottomSheetState extends ConsumerState<ModeBottomSheet> {
                       value: _effectivePreview(modeState),
                     ),
                     _InfoLine(
-                      label: 'Nearby Peers',
+                      label: 'Connected phones',
                       value: '${modeState.connectedPeerCount} connected',
                     ),
                   ],

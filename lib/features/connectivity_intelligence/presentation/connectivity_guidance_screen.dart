@@ -46,7 +46,7 @@ class ConnectivityGuidanceScreen extends ConsumerWidget {
                   ModeStatusChip(state: modeState),
                   PeerStatusChip(count: summary?.qualities.length ?? 0),
                   CompactStatusChip(
-                    label: '${summary?.pendingOfflineMessages ?? 0} queued',
+                    label: '${summary?.pendingOfflineMessages ?? 0} waiting',
                     color: (summary?.pendingOfflineMessages ?? 0) > 0
                         ? AppColors.warning
                         : AppColors.muted,
@@ -76,7 +76,7 @@ class ConnectivityGuidanceScreen extends ConsumerWidget {
                 if (activeChannel == null) ...[
                   InlineInfoNotice(
                     message:
-                        'Create or join an offline channel to use peer guidance.',
+                        'Create or join an offline channel to use phone connection guidance.',
                     icon: Icons.hub_rounded,
                     action: TextButton(
                       onPressed: () => context.go('/offline-channel'),
@@ -90,18 +90,18 @@ class ConnectivityGuidanceScreen extends ConsumerWidget {
                 NetworkHealthCard(summary: summary),
                 const SizedBox(height: 16),
                 Text(
-                  'Peer Ranking',
+                  'Phone Connection Ranking',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 8),
                 if (summary.qualities.isEmpty)
                   InlineInfoNotice(
                     message:
-                        'Start Nearby Discovery to collect ACK delay and packet metrics.',
+                        'Connect phones to collect delivery timing and message status.',
                     icon: Icons.radar_rounded,
                     action: TextButton(
                       onPressed: () => context.go('/nearby-peers'),
-                      child: const Text('Start'),
+                      child: const Text('Open'),
                     ),
                   )
                 else

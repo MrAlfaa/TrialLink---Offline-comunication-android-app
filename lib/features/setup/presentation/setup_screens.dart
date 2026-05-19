@@ -99,9 +99,9 @@ class _SetupAgreementScreenState extends ConsumerState<SetupAgreementScreen> {
                       'SOS can be sent with or without coordinates. If you allow SOS location, TrailLink will try to attach current or last-known location based on your settings. General teammate location sharing is controlled separately.',
                 ),
                 _AgreementSection(
-                  title: 'Nearby peer communication',
+                  title: 'Nearby phone communication',
                   body:
-                      'Nearby communication exchanges channel, identity, and packet metadata with devices using the same trip/channel context. Do not join channels that you do not trust.',
+                      'Nearby communication exchanges channel and identity details with phones using the same trip/channel context. Do not join channels that you do not trust.',
                 ),
                 _AgreementSection(
                   title: 'Voice and experimental features',
@@ -497,7 +497,7 @@ class _SetupFeaturePreferenceScreenState
             setState(() => _location = value);
           },
         ),
-        _toggle('Nearby Peer Discovery', _nearby, (value) {
+        _toggle('Connect Nearby Phones', _nearby, (value) {
           setState(() => _nearby = value);
         }),
         _toggle('Voice-note PTT', _voice, (value) {
@@ -664,7 +664,7 @@ class SetupPermissionScreen extends ConsumerWidget {
       children: [
         const SettingsInfoBox(
           message:
-              'Location supports maps and SOS. Bluetooth, Wi-Fi, and Nearby support offline peers. Microphone supports voice-note PTT.',
+              'Location supports maps and SOS. Bluetooth, Wi-Fi, and Nearby help connect phones offline. Microphone supports voice-note PTT.',
         ),
         const SizedBox(height: 18),
         FilledButton.icon(

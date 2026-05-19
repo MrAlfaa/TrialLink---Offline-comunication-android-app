@@ -56,7 +56,7 @@ void main() {
         timestamp: DateTime(2026, 5, 10),
       ).toEndpointName();
 
-      expect(endpointName, startsWith('TL2|'));
+      expect(endpointName, startsWith('TL3|'));
       expect(endpointName.length, lessThanOrEqualTo(131));
 
       final decoded = NearbyAdvertisementPayload.fromEndpointName(endpointName);

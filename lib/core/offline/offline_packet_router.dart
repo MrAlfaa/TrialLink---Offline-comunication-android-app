@@ -15,6 +15,7 @@ import '../../features/offline_channel/data/offline_channel_repository.dart';
 import '../../features/offline_channel/presentation/offline_channel_controller.dart';
 import '../../features/offline_chat/data/models/offline_packet_model.dart';
 import '../../features/offline_chat/data/offline_chat_repository.dart';
+import '../../features/p2p_session/data/p2p_session_service.dart';
 import '../../features/ptt/data/ptt_repository.dart';
 import '../identity/auth_access_controller.dart';
 import '../identity/current_user_actor.dart';
@@ -77,6 +78,7 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
     required EmergencyRepository emergencyRepository,
     required LocationRepository locationRepository,
     required PttRepository pttRepository,
+    P2PSessionService? p2pSessionService,
     ConnectivityMetricsRecorder? metricsRecorder,
     required Stream<String> packetStream,
     CurrentUserActor? currentActor,
@@ -86,6 +88,7 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
         _emergencyRepository = emergencyRepository,
         _locationRepository = locationRepository,
         _pttRepository = pttRepository,
+        _p2pSessionService = p2pSessionService,
         _metricsRecorder = metricsRecorder ?? ConnectivityMetricsRecorder(),
         _currentActor = currentActor,
         _bridgeEngine = bridgeEngine,
@@ -98,6 +101,7 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
   final EmergencyRepository _emergencyRepository;
   final LocationRepository _locationRepository;
   final PttRepository _pttRepository;
+  final P2PSessionService? _p2pSessionService;
   final ConnectivityMetricsRecorder _metricsRecorder;
   final BridgeEngine? _bridgeEngine;
   CurrentUserActor? _currentActor;
@@ -173,6 +177,11 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
       return;
     }
 
+    if (packet.packetType == 'trip_session_leave') {
+      await _handleTripSessionLeave(packet);
+      return;
+    }
+
     final activeChannel = await _channelRepository.getActiveChannel();
     if (activeChannel == null) {
       _debugRouter(
@@ -236,6 +245,12 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
         await _tryBridge(packet);
         break;
       case 'heartbeat':
+        await _p2pSessionService?.updateHeartbeat(
+          peerLocalId: packet.senderId,
+          peerDisplayName: packet.senderName,
+          channelId: packet.channelId,
+          channelCode: packet.channelCode,
+        );
         await _metricsRecorder.recordHeartbeat(
           endpointId: packet.senderId,
           userId: packet.senderId,
@@ -251,6 +266,9 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
           currentUser: actor,
         );
         break;
+      case 'trip_session_leave':
+        await _handleTripSessionLeave(packet);
+        return;
       case 'ptt_request':
       case 'ptt_release':
       case 'voice_note':
@@ -289,6 +307,21 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
     }
   }
 
+  Future<void> _handleTripSessionLeave(OfflinePacketModel packet) async {
+    final senderLocalId = packet.payload['senderLocalId']?.toString();
+    await _p2pSessionService?.markPeerDisconnectedByLocalId(
+      (senderLocalId?.isNotEmpty ?? false) ? senderLocalId! : packet.senderId,
+    );
+    state = state.copyWith(
+      lastNotice: '${packet.senderName} disconnected from this trip.',
+    );
+    _debugRouter(
+      'handled',
+      packet: packet,
+      reason: 'trip_session_leave',
+    );
+  }
+
   @override
   void dispose() {
     _subscription.cancel();
@@ -306,6 +339,7 @@ final offlinePacketRouterProvider =
         EmergencyRepository(nearbyRepository: nearbyRepository),
     locationRepository: LocationRepository(nearbyRepository: nearbyRepository),
     pttRepository: PttRepository(nearbyRepository: nearbyRepository),
+    p2pSessionService: ref.read(p2pSessionServiceProvider),
     metricsRecorder: ConnectivityMetricsRecorder(),
     packetStream: nearbyRepository.packetReceivedStream,
     currentActor: _currentRouterActor(ref),

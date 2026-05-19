@@ -92,7 +92,7 @@ class LocationRepository {
         channelCode: channel.channelCode,
         payloadJson: packet.toJsonString(),
       );
-      final peers = await _local.connectedPeers(channel.channelCode);
+      final peers = await _nearby.connectedPeers(channel.channelCode);
       for (final peer in peers) {
         await _nearby.sendPacket(
           endpointId: peer.endpointId,

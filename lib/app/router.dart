@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../core/config/env_config.dart';
 import '../core/identity/auth_access_controller.dart';
 import '../core/identity/auth_access_state.dart';
+import '../core/mode/mode_controller.dart';
 import '../features/account_link/link_offline_data_screen.dart';
 import '../features/app_lock/data/models/app_lock_status.dart';
 import '../features/app_lock/presentation/app_lock_controller.dart';
@@ -445,7 +446,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                       state,
                       MapScreen(
                         offlineChannelId: state.pathParameters['channelId']!,
-                        focus: MapFocus.fromExtra(state.extra),
                       ),
                     ),
                   ),
@@ -619,7 +619,8 @@ final _appRouterRefreshProvider = Provider<Listenable>((ref) {
   ref
     ..listen(authControllerProvider, (_, __) => notifier.refresh())
     ..listen(authAccessControllerProvider, (_, __) => notifier.refresh())
-    ..listen(appLockControllerProvider, (_, __) => notifier.refresh());
+    ..listen(appLockControllerProvider, (_, __) => notifier.refresh())
+    ..listen(modeControllerProvider, (_, __) => notifier.refresh());
   ref.onDispose(notifier.dispose);
   return notifier;
 });

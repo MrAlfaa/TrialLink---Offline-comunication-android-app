@@ -18,6 +18,18 @@ import '../data/ptt_repository.dart';
 
 enum PttVoiceMode { voiceNote, liveRadio }
 
+bool shouldRefreshPttForOfflineNotice(String? notice) {
+  final value = (notice ?? '').toLowerCase();
+  return value.contains('voice note received') ||
+      value.contains('voice note delivered') ||
+      value.contains('is speaking') ||
+      value.contains('ptt channel is free') ||
+      value.contains('another user is speaking') ||
+      value.contains('live audio received') ||
+      value.contains('live radio ended') ||
+      value.contains('is live');
+}
+
 class PttSessionArgs {
   const PttSessionArgs({
     required this.currentUser,
@@ -175,7 +187,7 @@ class PttController extends StateNotifier<PttState> {
   Future<void> selectVoiceMode(PttVoiceMode mode) async {
     if (args.isOnlineGroup && mode == PttVoiceMode.liveRadio) {
       state = state.copyWith(
-        voiceMode: PttVoiceMode.voiceNote,
+        voiceMode: PttVoiceMode.liveRadio,
         errorMessage: 'Live Radio is offline-only.',
       );
       return;
@@ -191,9 +203,7 @@ class PttController extends StateNotifier<PttState> {
       );
       if (!result.allowed) {
         state = state.copyWith(
-          voiceMode: result.fallbackToVoiceNote
-              ? PttVoiceMode.voiceNote
-              : PttVoiceMode.liveRadio,
+          voiceMode: PttVoiceMode.liveRadio,
           infoMessage: result.reason,
         );
       }
@@ -240,7 +250,7 @@ class PttController extends StateNotifier<PttState> {
     } catch (error) {
       state = state.copyWith(
         isWaitingForFloor: false,
-        errorMessage: error.toString(),
+        errorMessage: _friendlyPttError(error),
       );
     }
   }
@@ -294,7 +304,7 @@ class PttController extends StateNotifier<PttState> {
       state = state.copyWith(infoMessage: 'Voice note sent.');
     } catch (error) {
       await refresh();
-      state = state.copyWith(errorMessage: error.toString());
+      state = state.copyWith(errorMessage: _friendlyPttError(error));
     }
   }
 
@@ -302,7 +312,7 @@ class PttController extends StateNotifier<PttState> {
     try {
       await _repository.play(note);
     } catch (error) {
-      state = state.copyWith(errorMessage: error.toString());
+      state = state.copyWith(errorMessage: _friendlyPttError(error));
     }
   }
 
@@ -332,9 +342,7 @@ class PttController extends StateNotifier<PttState> {
     if (!result.allowed) {
       state = state.copyWith(
         isWaitingForFloor: false,
-        voiceMode: result.fallbackToVoiceNote
-            ? PttVoiceMode.voiceNote
-            : PttVoiceMode.liveRadio,
+        voiceMode: PttVoiceMode.liveRadio,
         infoMessage: result.reason,
       );
       return;
@@ -364,8 +372,8 @@ class PttController extends StateNotifier<PttState> {
       state = state.copyWith(
         isWaitingForFloor: false,
         isLiveStreaming: false,
-        voiceMode: PttVoiceMode.voiceNote,
-        errorMessage: error.toString(),
+        voiceMode: PttVoiceMode.liveRadio,
+        errorMessage: _friendlyPttError(error),
       );
     }
   }
@@ -385,7 +393,7 @@ class PttController extends StateNotifier<PttState> {
       state = state.copyWith(infoMessage: 'Live Radio ended.');
     } catch (error) {
       await refresh();
-      state = state.copyWith(errorMessage: error.toString());
+      state = state.copyWith(errorMessage: _friendlyPttError(error));
     }
   }
 
@@ -476,7 +484,7 @@ class PttController extends StateNotifier<PttState> {
     state = state.copyWith(
       isLiveStreaming: false,
       isWaitingForFloor: false,
-      voiceMode: PttVoiceMode.voiceNote,
+      voiceMode: PttVoiceMode.liveRadio,
       errorMessage: message,
     );
     await refresh();
@@ -500,24 +508,33 @@ class PttController extends StateNotifier<PttState> {
     for (final subscription in _subscriptions) {
       subscription.cancel();
     }
-    _repository.dispose();
     super.dispose();
   }
 }
 
-final pttRepositoryProvider = Provider<PttRepository>((ref) {
-  return PttRepository(
+String _friendlyPttError(Object error) {
+  return error
+      .toString()
+      .replaceFirst(RegExp(r'^(Bad state|Exception|StateError):\s*'), '')
+      .trim();
+}
+
+final pttRepositoryProvider = Provider.autoDispose<PttRepository>((ref) {
+  final repository = PttRepository(
     nearbyRepository: ref.watch(nearbyRepositoryProvider),
     settings: ref.read(settingsServiceProvider),
   );
+  ref.onDispose(repository.dispose);
+  return repository;
 });
 
 final pttControllerProvider = StateNotifierProvider.autoDispose
     .family<PttController, PttState, PttSessionArgs>(
   (ref, args) {
+    final repository = ref.watch(pttRepositoryProvider);
     final controller = PttController(
       args: args,
-      repository: ref.read(pttRepositoryProvider),
+      repository: repository,
       socketService: ref.read(socketServiceProvider),
       initialMode: ref.read(modeControllerProvider).compatibilityConnectionMode,
       initialEffectiveMode: ref.read(modeControllerProvider).effectiveMode,

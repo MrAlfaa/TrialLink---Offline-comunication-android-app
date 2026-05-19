@@ -92,12 +92,14 @@ class OfflineChannelRepository {
     required String channelName,
     required String description,
     String? customCode,
+    bool activate = true,
   }) async {
     return createChannelForActor(
       actor: OfflineChannelActor.fromUser(user),
       channelName: channelName,
       description: description,
       customCode: customCode,
+      activate: activate,
     );
   }
 
@@ -106,12 +108,14 @@ class OfflineChannelRepository {
     required String channelName,
     required String description,
     String? customCode,
+    bool activate = true,
   }) {
     return createChannelForActor(
       actor: OfflineChannelActor.fromIdentity(identity),
       channelName: channelName,
       description: description,
       customCode: customCode,
+      activate: activate,
     );
   }
 
@@ -120,6 +124,7 @@ class OfflineChannelRepository {
     required String channelName,
     required String description,
     String? customCode,
+    bool activate = true,
   }) async {
     _validateName(channelName);
     _validateDescription(description);
@@ -130,6 +135,7 @@ class OfflineChannelRepository {
 
     final now = DateTime.now();
     final hasActive = await _local.getActiveChannel() != null;
+    final shouldActivate = activate && !hasActive;
     final channel = OfflineChannelModel(
       channelId: _uuid.v4(),
       channelCode: channelCode,
@@ -137,7 +143,7 @@ class OfflineChannelRepository {
       description: description.trim().isEmpty ? null : description.trim(),
       createdByUserId: actor.userId,
       createdByName: actor.displayName,
-      isActive: !hasActive,
+      isActive: shouldActivate,
       createdAt: now,
       updatedAt: now,
       lastOpenedAt: now,
@@ -146,7 +152,7 @@ class OfflineChannelRepository {
     try {
       await _local.insertChannel(channel);
       await _local.upsertMember(_memberForActor(channel, actor, 'owner'));
-      if (!hasActive) {
+      if (shouldActivate) {
         await _local.setActiveChannel(channel.channelId);
       }
       return (await _local.getChannel(channel.channelId)) ?? channel;
@@ -168,22 +174,27 @@ class OfflineChannelRepository {
   Future<OfflineChannelModel> joinChannelForIdentity({
     required LocalIdentityModel identity,
     required String channelCode,
+    bool activate = true,
   }) {
     return joinChannelForActor(
       actor: OfflineChannelActor.fromIdentity(identity),
       channelCode: channelCode,
+      activate: activate,
     );
   }
 
   Future<OfflineChannelModel> joinChannelForActor({
     required OfflineChannelActor actor,
     required String channelCode,
+    bool activate = true,
   }) async {
     final normalized = _normalizeCode(channelCode);
     final existing = await _local.getChannelByCode(normalized);
     if (existing != null) {
       await _local.upsertMember(_memberForActor(existing, actor, 'member'));
-      await _local.setActiveChannel(existing.channelId);
+      if (activate) {
+        await _local.setActiveChannel(existing.channelId);
+      }
       return (await _local.getChannel(existing.channelId)) ?? existing;
     }
 
@@ -193,10 +204,10 @@ class OfflineChannelRepository {
       channelCode: normalized,
       channelName: 'Offline Channel $normalized',
       description:
-          'Channel membership will be verified with nearby devices in the peer discovery phase.',
+          'Channel membership will be checked when nearby phones connect.',
       createdByUserId: actor.userId,
       createdByName: actor.displayName,
-      isActive: true,
+      isActive: activate,
       createdAt: now,
       updatedAt: now,
       lastOpenedAt: now,
@@ -204,7 +215,9 @@ class OfflineChannelRepository {
 
     await _local.insertChannel(channel);
     await _local.upsertMember(_memberForActor(channel, actor, 'member'));
-    await _local.setActiveChannel(channel.channelId);
+    if (activate) {
+      await _local.setActiveChannel(channel.channelId);
+    }
     return (await _local.getChannel(channel.channelId)) ?? channel;
   }
 

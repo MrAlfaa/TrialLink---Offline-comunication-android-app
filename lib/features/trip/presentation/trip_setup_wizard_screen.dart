@@ -9,10 +9,13 @@ import '../../../core/identity/auth_access_state.dart';
 import '../../../core/identity/local_identity_repository.dart';
 import '../../../core/settings/settings_service.dart';
 import '../../../shared/widgets/compact_status_chip.dart';
-import '../../groups/presentation/group_controller.dart';
 import '../../nearby/data/nearby_permission_service.dart';
 import '../../offline_channel/presentation/offline_channel_controller.dart';
+import '../../p2p_session/data/p2p_session_guard.dart';
+import '../../p2p_session/data/p2p_session_service.dart';
+import '../../p2p_session/presentation/p2p_session_switch_dialog.dart';
 import '../../ptt/data/ptt_audio_service.dart';
+import '../../trip_context/data/cloud_prepared_trip_repository.dart';
 import '../../trip_context/data/trip_context_service.dart';
 import '../data/trip_session_repository.dart';
 import '../data/trip_session_service.dart';
@@ -276,29 +279,38 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
         throw StateError('Create your local profile before starting a trip.');
       }
       final repo = ref.read(tripSessionRepositoryProvider);
-      final access = ref
-          .read(authAccessControllerProvider)
-          .accessState
-          .canUseBackendFeatures;
+      final switchAction = await _resolveSwitchAction();
+      if (switchAction == P2PSessionSwitchAction.cancel) return;
+      if (switchAction == P2PSessionSwitchAction.disconnectAndSwitch) {
+        await ref
+            .read(p2pSessionGuardProvider)
+            .disconnectActiveSession(reason: 'switch_trip');
+      }
       switch (_type) {
         case TripWizardType.cloudBackup:
-          await repo.createCloudBackupTrip(
-            tripName: _tripNameController.text,
-            description: _descriptionController.text,
-            identity: identity,
-            groupRepository: access ? ref.read(groupRepositoryProvider) : null,
-            customChannelCode: _blankToNull(_customCodeController.text),
-          );
+          await ref
+              .read(cloudPreparedTripRepositoryProvider)
+              .createCloudPreparedTrip(
+                tripName: _tripNameController.text,
+                description: _descriptionController.text,
+              );
         case TripWizardType.offlineOnly:
           await repo.createOfflineOnlyTrip(
             tripName: _tripNameController.text,
             identity: identity,
             customChannelCode: _blankToNull(_customCodeController.text),
+            activate: switchAction != P2PSessionSwitchAction.createInactive,
           );
         case TripWizardType.joinExisting:
-          await ref
-              .read(tripContextServiceProvider)
-              .joinOfflineChannelAsActiveTrip(_joinCodeController.text);
+          if (switchAction == P2PSessionSwitchAction.createInactive) {
+            await ref
+                .read(tripContextServiceProvider)
+                .joinOfflineChannelAsInactiveTrip(_joinCodeController.text);
+          } else {
+            await ref
+                .read(tripContextServiceProvider)
+                .joinOfflineChannelAsActiveTrip(_joinCodeController.text);
+          }
       }
       final settings = ref.read(settingsServiceProvider);
       await settings.setBool('tutorial_seen', true);
@@ -319,6 +331,24 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  Future<P2PSessionSwitchAction> _resolveSwitchAction() async {
+    final session =
+        await ref.read(p2pSessionServiceProvider).getActiveSession();
+    if (session == null || !session.blocksTripSwitch) {
+      return P2PSessionSwitchAction.disconnectAndSwitch;
+    }
+    if (!mounted) return P2PSessionSwitchAction.cancel;
+    final newTripName = _type == TripWizardType.joinExisting
+        ? _joinCodeController.text
+        : _tripNameController.text;
+    return showP2PSessionSwitchDialog(
+      context: context,
+      currentTripName: session.channelCode,
+      newTripName: newTripName.trim().isEmpty ? 'the new trip' : newTripName,
+      allowCreateInactive: _type != TripWizardType.cloudBackup,
+    );
   }
 }
 

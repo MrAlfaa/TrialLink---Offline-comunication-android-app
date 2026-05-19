@@ -3,16 +3,22 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/database/local_database.dart';
 import '../../connectivity_intelligence/data/connectivity_metrics_recorder.dart';
 import '../../../core/identity/current_user_actor.dart';
 import '../../offline_channel/data/models/offline_channel_model.dart';
 import '../../offline_channel/data/offline_channel_repository.dart';
 import '../../offline_chat/data/models/offline_packet_model.dart';
+import '../../p2p_session/data/models/p2p_session_state.dart';
+import '../../p2p_session/data/p2p_session_service.dart';
+import '../../trip/data/trip_session_model.dart';
+import '../../trip_context/data/models/active_trip_context.dart';
 import '../data/models/nearby_connection_status.dart';
 import '../data/models/nearby_peer_model.dart';
 import '../data/nearby_connections_transport.dart';
 import '../data/nearby_packet_transport.dart';
 import '../data/nearby_repository.dart';
+import '../data/peer_validation_service.dart';
 
 enum NearbyFailureKind { staleEndpoint, permission, transport, unknown }
 
@@ -35,13 +41,13 @@ NearbyFailureKind nearbyFailureKind(Object error) {
 String nearbyUserMessageFromError(Object error) {
   switch (nearbyFailureKind(error)) {
     case NearbyFailureKind.staleEndpoint:
-      return 'That peer is no longer reachable. Start discovery again and ask the other phone to keep Nearby open.';
+      return 'That phone is no longer reachable. Find phones again and ask the other phone to keep TrailLink open.';
     case NearbyFailureKind.permission:
       return 'Nearby permissions are required. Turn on Bluetooth, Wi-Fi, and location access, then try again.';
     case NearbyFailureKind.transport:
-      return 'Nearby connection failed. Check Bluetooth, Wi-Fi, and Nearby discovery, then try again.';
+      return 'Nearby connection failed. Check Bluetooth, Wi-Fi, and location, then try again.';
     case NearbyFailureKind.unknown:
-      return 'Nearby action failed. Try discovery again and keep both phones close with Nearby open.';
+      return 'Nearby action failed. Keep both phones close and try again.';
   }
 }
 
@@ -52,7 +58,12 @@ final nearbyTransportProvider = Provider<NearbyPacketTransport>((ref) {
 });
 
 final nearbyRepositoryProvider = Provider<NearbyRepository>((ref) {
-  return NearbyRepository(transport: ref.watch(nearbyTransportProvider));
+  final repository =
+      NearbyRepository(transport: ref.watch(nearbyTransportProvider));
+  ref.onDispose(() {
+    unawaited(repository.dispose());
+  });
+  return repository;
 });
 
 class NearbyState {
@@ -107,31 +118,38 @@ class NearbyState {
 
 class NearbySessionArgs {
   const NearbySessionArgs({
+    required this.tripId,
     required this.channel,
     required this.user,
   });
 
+  final String tripId;
   final OfflineChannelModel channel;
   final CurrentUserActor user;
 
   @override
   bool operator ==(Object other) {
     return other is NearbySessionArgs &&
+        other.tripId == tripId &&
         other.channel.channelId == channel.channelId &&
         other.user.localUserId == user.localUserId;
   }
 
   @override
-  int get hashCode => Object.hash(channel.channelId, user.localUserId);
+  int get hashCode => Object.hash(tripId, channel.channelId, user.localUserId);
 }
 
 class NearbyController extends StateNotifier<NearbyState> {
   NearbyController({
     required this.args,
     required NearbyRepository repository,
+    required P2PSessionService p2pSessionService,
+    required PeerValidationService peerValidationService,
     OfflineChannelRepository? offlineChannelRepository,
     ConnectivityMetricsRecorder? metricsRecorder,
   })  : _repository = repository,
+        _p2pSessionService = p2pSessionService,
+        _peerValidationService = peerValidationService,
         _offlineChannelRepository =
             offlineChannelRepository ?? OfflineChannelRepository(),
         _metricsRecorder = metricsRecorder ?? ConnectivityMetricsRecorder(),
@@ -141,6 +159,8 @@ class NearbyController extends StateNotifier<NearbyState> {
 
   final NearbySessionArgs args;
   final NearbyRepository _repository;
+  final P2PSessionService _p2pSessionService;
+  final PeerValidationService _peerValidationService;
   final OfflineChannelRepository _offlineChannelRepository;
   final ConnectivityMetricsRecorder _metricsRecorder;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
@@ -176,16 +196,28 @@ class NearbyController extends StateNotifier<NearbyState> {
 
   Future<void> startAdvertising() async {
     if (!await requestPermissions()) return;
+    final session = await LocalDatabase.instance.ensureSession();
     await _run(
       () => _repository.startAdvertising(
         userId: args.user.localUserId,
         displayName: args.user.displayName,
         activeChannelId: args.channel.channelId,
         activeChannelCode: args.channel.channelCode,
+        tripId: args.tripId,
+        publicUserId: args.user.publicUserId,
+        appDeviceId: session['session_id']?.toString(),
+        capabilities: const ['text', 'sos', 'location', 'ptt'],
       ),
-      successMessage: 'Advertising started.',
-      after: () {
+      successMessage: 'Your phone is visible to this trip.',
+      after: () async {
+        await _p2pSessionService.startSessionForTrip(
+          tripId: args.tripId,
+          channelId: args.channel.channelId,
+          channelCode: args.channel.channelCode,
+          state: P2PSessionState.advertising,
+        );
         state = state.copyWith(isAdvertising: true);
+        await refreshPeers();
         _startHeartbeat();
       },
     );
@@ -194,8 +226,9 @@ class NearbyController extends StateNotifier<NearbyState> {
   Future<void> stopAdvertising() async {
     await _run(
       _repository.stopAdvertising,
-      successMessage: 'Advertising stopped.',
-      after: () {
+      successMessage: 'Your phone is no longer visible.',
+      after: () async {
+        await _p2pSessionService.cleanupStalePeers();
         state = state.copyWith(isAdvertising: false);
         _stopHeartbeatIfIdle();
       },
@@ -206,12 +239,19 @@ class NearbyController extends StateNotifier<NearbyState> {
     if (!await requestPermissions()) return;
     await _run(
       () => _repository.startDiscovery(args.channel.channelCode),
-      successMessage: 'Discovery started.',
-      after: () {
+      successMessage: 'Looking for nearby phones.',
+      after: () async {
+        await _p2pSessionService.startSessionForTrip(
+          tripId: args.tripId,
+          channelId: args.channel.channelId,
+          channelCode: args.channel.channelCode,
+          state: P2PSessionState.discovering,
+        );
         state = state.copyWith(
           isDiscovering: true,
           lastScanAt: DateTime.now(),
         );
+        await refreshPeers();
         _startHeartbeat();
       },
     );
@@ -220,8 +260,9 @@ class NearbyController extends StateNotifier<NearbyState> {
   Future<void> stopDiscovery() async {
     await _run(
       _repository.stopDiscovery,
-      successMessage: 'Discovery stopped.',
-      after: () {
+      successMessage: 'Stopped looking for phones.',
+      after: () async {
+        await _p2pSessionService.cleanupStalePeers();
         state = state.copyWith(isDiscovering: false);
         _stopHeartbeatIfIdle();
       },
@@ -251,26 +292,66 @@ class NearbyController extends StateNotifier<NearbyState> {
   Future<void> disconnectFromPeer(String endpointId) async {
     await _run(
       () => _repository.disconnectFromPeer(endpointId),
-      successMessage: 'Peer disconnected.',
-      after: () =>
-          _setPeerStatus(endpointId, PeerConnectionStatus.disconnected),
+      successMessage: 'Phone disconnected.',
+      after: () async {
+        await _p2pSessionService.markPeerDisconnected(endpointId);
+        _setPeerStatus(endpointId, PeerConnectionStatus.disconnected);
+      },
     );
   }
 
   Future<void> _onPeer(NearbyPeerModel peer) async {
     if (peer.activeChannelCode != args.channel.channelCode) return;
-    await _repository.savePeer(peer);
+    final trip = await _activeTripFromArgs();
+    final allowUnknown = await _allowUnknownSameChannel(trip);
+    final validation = await _peerValidationService.validatePeer(
+      context: ActiveTripContext(trip: trip, activeChannel: args.channel),
+      peer: peer,
+      allowUnknownSameChannel: allowUnknown,
+    );
+    if (validation == PeerValidationResult.mismatch) return;
+    final validatedPeer = peer.copyWith(
+      verificationStatus: PeerValidationService.statusName(validation),
+    );
+    await _p2pSessionService.markPeerFromNearby(validatedPeer);
+    await _repository.savePeer(validatedPeer);
     await _offlineChannelRepository.upsertPeerPresence(
       channel: args.channel,
-      peer: peer,
+      peer: validatedPeer,
     );
-    await _metricsRecorder.recordPeerEvent(peer, source: peer.status.name);
+    await _metricsRecorder.recordPeerEvent(
+      validatedPeer,
+      source: validatedPeer.status.name,
+    );
     final peers = [
-      peer,
-      ...state.peers.where((item) => item.endpointId != peer.endpointId),
+      validatedPeer,
+      ...state.peers
+          .where((item) => item.endpointId != validatedPeer.endpointId),
     ]..sort((a, b) => b.lastSeenAt.compareTo(a.lastSeenAt));
     if (!mounted) return;
     state = state.copyWith(peers: peers, lastScanAt: DateTime.now());
+    await refreshPeers();
+  }
+
+  Future<TripSessionModel> _activeTripFromArgs() async {
+    final db = await LocalDatabase.instance.database;
+    final rows = await db.query(
+      'trip_sessions',
+      where: 'trip_id = ?',
+      whereArgs: [args.tripId],
+      limit: 1,
+    );
+    if (rows.isEmpty) throw StateError('Active trip not found for Nearby.');
+    return TripSessionModel.fromDb(rows.first);
+  }
+
+  Future<bool> _allowUnknownSameChannel(TripSessionModel trip) async {
+    final policy = await LocalDatabase.instance.readSetting(
+      'peer_validation_policy_${trip.tripId}',
+    );
+    if (policy == 'known_members_only') return false;
+    if (trip.offlineBackupReady) return false;
+    return true;
   }
 
   void _startHeartbeat() {
@@ -314,12 +395,13 @@ class NearbyController extends StateNotifier<NearbyState> {
           packetJson: packet.toJsonString(),
         );
       } catch (_) {
-        // Packet send failures are already visible through quality scoring from normal traffic.
+        await _onPeerLost(peer.endpointId);
       }
     }
   }
 
   Future<void> _onPeerLost(String endpointId) async {
+    await _p2pSessionService.markPeerLost(endpointId);
     await _repository.markLost(endpointId);
     await _offlineChannelRepository.markPeerDisconnected(
       channelId: args.channel.channelId,
@@ -359,14 +441,14 @@ class NearbyController extends StateNotifier<NearbyState> {
   Future<void> _run(
     Future<void> Function() action, {
     required String successMessage,
-    VoidCallback? after,
+    FutureOr<void> Function()? after,
     FutureOr<void> Function(Object error)? onError,
   }) async {
     state = state.copyWith(isBusy: true, clearMessages: true);
     try {
       await action();
       if (!mounted) return;
-      after?.call();
+      await after?.call();
       state = state.copyWith(
         isBusy: false,
         successMessage: successMessage,
@@ -399,6 +481,8 @@ final nearbyControllerProvider = StateNotifierProvider.autoDispose
   return NearbyController(
     args: args,
     repository: ref.watch(nearbyRepositoryProvider),
+    p2pSessionService: ref.read(p2pSessionServiceProvider),
+    peerValidationService: ref.read(peerValidationServiceProvider),
     metricsRecorder: ConnectivityMetricsRecorder(),
   );
 });

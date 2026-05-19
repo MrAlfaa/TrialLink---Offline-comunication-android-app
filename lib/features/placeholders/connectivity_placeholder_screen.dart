@@ -38,18 +38,18 @@ class ConnectivityPlaceholderScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 14),
                     Text(
-                      'Nearby offline discovery',
+                      'Connect nearby phones',
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Find and connect TrailLink users on the same active offline channel. Discovery works without backend internet access.',
+                      'Find and connect teammates on the same active offline channel without backend internet access.',
                     ),
                     const SizedBox(height: 16),
                     FilledButton.icon(
                       onPressed: () => context.go('/nearby-peers'),
                       icon: const Icon(Icons.travel_explore_rounded),
-                      label: const Text('Open Nearby Peers'),
+                      label: const Text('Open Connect Phones'),
                     ),
                   ],
                 ),

@@ -11,6 +11,10 @@ import '../../../shared/widgets/settings_info_box.dart';
 import '../../groups/data/models/group_model.dart';
 import '../../groups/presentation/group_controller.dart';
 import '../../offline_channel/presentation/offline_channel_controller.dart';
+import '../../p2p_session/data/p2p_session_guard.dart';
+import '../../p2p_session/data/p2p_session_service.dart';
+import '../../p2p_session/presentation/p2p_session_switch_dialog.dart';
+import '../../trip_context/data/cloud_prepared_trip_repository.dart';
 import '../../trip_context/data/trip_context_service.dart';
 import '../data/trip_session_repository.dart';
 import '../data/trip_session_service.dart';
@@ -214,10 +218,12 @@ class _TripSetupScreenState extends ConsumerState<TripSetupScreen> {
     try {
       final saved = await switch (_action) {
         _TripSetupAction.createOffline => _createOfflineTrip(
+            context: context,
             tripName: _tripNameController.text,
             customChannelCode: _channelCodeController.text,
           ),
         _TripSetupAction.joinOffline => _joinOfflineTrip(
+            context: context,
             channelCode: _channelCodeController.text,
             tripName: _tripNameController.text,
           ),
@@ -282,6 +288,7 @@ class _TripSetupScreenState extends ConsumerState<TripSetupScreen> {
   }
 
   Future<bool> _createOfflineTrip({
+    required BuildContext context,
     required String tripName,
     required String customChannelCode,
   }) async {
@@ -290,16 +297,29 @@ class _TripSetupScreenState extends ConsumerState<TripSetupScreen> {
     if (identity == null) {
       throw StateError('Create an offline identity before setting up a trip.');
     }
+    if (!context.mounted) return false;
+    final action = await _resolveSwitchAction(
+      context: context,
+      newTripName: tripName,
+    );
+    if (action == P2PSessionSwitchAction.cancel) return false;
+    if (action == P2PSessionSwitchAction.disconnectAndSwitch) {
+      await ref
+          .read(p2pSessionGuardProvider)
+          .disconnectActiveSession(reason: 'switch_trip');
+    }
     await ref.read(tripSessionRepositoryProvider).createOfflineTrip(
           tripName: tripName,
           identity: identity,
           customChannelCode:
               customChannelCode.trim().isEmpty ? null : customChannelCode,
+          activate: action != P2PSessionSwitchAction.createInactive,
         );
     return true;
   }
 
   Future<bool> _joinOfflineTrip({
+    required BuildContext context,
     required String channelCode,
     required String tripName,
   }) async {
@@ -308,11 +328,49 @@ class _TripSetupScreenState extends ConsumerState<TripSetupScreen> {
     if (identity == null) {
       throw StateError('Create an offline identity before joining a trip.');
     }
-    await ref.read(tripContextServiceProvider).joinOfflineChannelAsActiveTrip(
-          channelCode,
-          tripName: tripName.trim().isEmpty ? null : tripName,
-        );
+    final normalizedName = tripName.trim().isEmpty ? channelCode : tripName;
+    if (!context.mounted) return false;
+    final action = await _resolveSwitchAction(
+      context: context,
+      newTripName: normalizedName,
+    );
+    if (action == P2PSessionSwitchAction.cancel) return false;
+    if (action == P2PSessionSwitchAction.disconnectAndSwitch) {
+      await ref
+          .read(p2pSessionGuardProvider)
+          .disconnectActiveSession(reason: 'switch_trip');
+    }
+    if (action == P2PSessionSwitchAction.createInactive) {
+      await ref
+          .read(tripContextServiceProvider)
+          .joinOfflineChannelAsInactiveTrip(
+            channelCode,
+            tripName: tripName.trim().isEmpty ? null : tripName,
+          );
+    } else {
+      await ref.read(tripContextServiceProvider).joinOfflineChannelAsActiveTrip(
+            channelCode,
+            tripName: tripName.trim().isEmpty ? null : tripName,
+          );
+    }
     return true;
+  }
+
+  Future<P2PSessionSwitchAction> _resolveSwitchAction({
+    required BuildContext context,
+    required String newTripName,
+  }) async {
+    final session =
+        await ref.read(p2pSessionServiceProvider).getActiveSession();
+    if (session == null || !session.blocksTripSwitch) {
+      return P2PSessionSwitchAction.disconnectAndSwitch;
+    }
+    if (!context.mounted) return P2PSessionSwitchAction.cancel;
+    return showP2PSessionSwitchDialog(
+      context: context,
+      currentTripName: session.channelCode,
+      newTripName: newTripName.trim().isEmpty ? 'the new trip' : newTripName,
+    );
   }
 
   Future<bool> _createOnlineTrip(
@@ -326,10 +384,14 @@ class _TripSetupScreenState extends ConsumerState<TripSetupScreen> {
       _showError(context, 'Local identity is required before linking a group.');
       return false;
     }
-    await ref.read(tripSessionRepositoryProvider).createOnlineTripFromGroup(
-          group: group,
-          localIdentityId: identity.localUserId,
-        );
+    await ref
+        .read(cloudPreparedTripRepositoryProvider)
+        .joinCloudPreparedTrip(group.groupCode);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Offline backup prepared')),
+      );
+    }
     return true;
   }
 

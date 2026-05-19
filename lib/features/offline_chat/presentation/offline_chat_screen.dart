@@ -157,7 +157,7 @@ class _OfflineChatScreenState extends ConsumerState<OfflineChatScreen> {
             icon: Icons.hub_rounded,
           ),
           ChatHeaderChip(
-            label: connectedCount > 0 ? 'Nearby connected' : 'Queued',
+            label: connectedCount > 0 ? 'Nearby connected' : 'Waiting to send',
             color: connectedCount > 0 ? AppColors.success : AppColors.warning,
             icon: connectedCount > 0
                 ? Icons.bluetooth_connected_rounded
@@ -233,7 +233,7 @@ class _OfflineChatScreenState extends ConsumerState<OfflineChatScreen> {
                 : OfflineChatInputBar(
                     isSending: state.isSending,
                     queueHint: connectedCount == 0
-                        ? 'No peers connected. Messages will be queued.'
+                        ? 'No phones connected. Messages will wait to send.'
                         : null,
                     onSend: controller.sendText,
                   ),
@@ -419,7 +419,7 @@ class _EmptyOfflineChat extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Messages are saved locally first and sent when a nearby peer is connected.',
+              'Messages are saved locally first and sent when a nearby phone is connected.',
               textAlign: TextAlign.center,
               style: Theme.of(context)
                   .textTheme

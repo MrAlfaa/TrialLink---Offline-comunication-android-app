@@ -112,7 +112,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('Phase 14H queued hello'), findsOneWidget);
-      expect(find.text('Queued'), findsOneWidget);
+      expect(find.text('Waiting to send'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('offline-chat-composer')),
         findsOneWidget,
@@ -231,7 +231,7 @@ class _FullscreenChatHarnessState extends State<_FullscreenChatHarness> {
                           for (final message in _messages)
                             ListTile(
                               title: Text(message),
-                              subtitle: const Text('Queued'),
+                              subtitle: const Text('Waiting to send'),
                             ),
                         ],
                       ),
@@ -250,7 +250,7 @@ class _FullscreenChatHarnessState extends State<_FullscreenChatHarness> {
               OfflineChatInputBar(
                 isSending: false,
                 queueHint: widget.peerCount == 0
-                    ? 'No peers connected. Messages will be queued.'
+                    ? 'No phones connected. Messages will wait to send.'
                     : null,
                 onSend: (message) {
                   setState(() => _messages.add(message));

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../trip_context/data/cloud_prepared_trip_repository.dart';
 import 'group_controller.dart';
 
 class CreateGroupScreen extends ConsumerStatefulWidget {
@@ -29,20 +30,23 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final group =
-        await ref.read(groupMutationControllerProvider.notifier).createGroup(
-              groupName: _nameController.text.trim(),
-              description: _descriptionController.text.trim(),
-            );
+    final metadata = await ref
+        .read(cloudPreparedTripRepositoryProvider)
+        .createCloudPreparedTrip(
+          tripName: _nameController.text.trim(),
+          description: _descriptionController.text.trim(),
+        );
 
-    if (group != null) {
-      ref.invalidate(myGroupsProvider);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Group code: ${group.groupCode}')),
-      );
-      context.go('/groups/${group.id}');
-    }
+    ref.invalidate(myGroupsProvider);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Group code: ${metadata.group.groupCode}. Offline backup prepared.',
+        ),
+      ),
+    );
+    context.go('/groups/${metadata.group.id}');
   }
 
   @override

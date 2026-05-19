@@ -23,6 +23,7 @@ class CurrentUserActor {
     this.email = '',
     this.identityType = 'authenticated',
     this.backendUserId,
+    this.publicUserId,
   });
 
   factory CurrentUserActor.fromAuthAccess(AuthAccessStatus access) {
@@ -33,6 +34,7 @@ class CurrentUserActor {
         id: user.id,
         localUserId: identity?.localUserId ?? user.id,
         backendUserId: user.id,
+        publicUserId: user.publicUserId ?? identity?.publicUserId,
         displayName: user.fullName,
         email: user.email,
         identityType: identity?.identityType ?? 'authenticated_cached',
@@ -48,6 +50,7 @@ class CurrentUserActor {
       id: identity.backendUserId ?? identity.localUserId,
       localUserId: identity.localUserId,
       backendUserId: identity.backendUserId,
+      publicUserId: identity.publicUserId,
       displayName: identity.displayName,
       email: identity.email ?? '',
       identityType: identity.identityType,
@@ -59,6 +62,7 @@ class CurrentUserActor {
       id: user.id,
       localUserId: user.id,
       backendUserId: user.id,
+      publicUserId: user.publicUserId,
       displayName: user.fullName,
       email: user.email,
       identityType: 'verified',
@@ -68,6 +72,7 @@ class CurrentUserActor {
   final String id;
   final String localUserId;
   final String? backendUserId;
+  final String? publicUserId;
   final String displayName;
   final String email;
   final String identityType;

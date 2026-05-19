@@ -11,11 +11,13 @@ class TrailBottomNav extends StatelessWidget {
     required this.mode,
     required this.onModePressed,
     required this.modeButtonEnabled,
+    this.effectiveMode = EffectiveMode.online,
     super.key,
   });
 
   final String location;
   final UserMode mode;
+  final EffectiveMode effectiveMode;
   final VoidCallback onModePressed;
   final bool modeButtonEnabled;
 
@@ -64,6 +66,12 @@ class TrailBottomNav extends StatelessWidget {
                       onTap: () => context.go('/chat'),
                     ),
                     const SizedBox(width: 64),
+                    _NavItem(
+                      label: 'Connect',
+                      icon: Icons.radar_rounded,
+                      selected: _matches('/nearby-peers'),
+                      onTap: () => context.go('/nearby-peers'),
+                    ),
                     _NavItem(
                       label: 'Map',
                       icon: Icons.map_rounded,

@@ -16,7 +16,31 @@ backend/npm-debug.log*
 backend/yarn-debug.log*
 backend/yarn-error.log*
 backend/server.*.log
+docs/
 
+# QA / physical-device test evidence
+# Keep generated screenshots, UI dumps, logcat files, and run outputs out of git.
+# Do not ignore all *.png/*.xml globally because app assets and source files may use them.
+docs/qa/
+qa/
+evidence/
+test_evidence/
+test-results/
+android-test-results/
+screenshots/
+captures/
+logcat*.txt
+*-logcat*.txt
+*.logcat
+uiautomator*.xml
+ui-*.xml
+*-ui.xml
+*.hprof
+*.trace
+*.perfetto-trace
+*.mp4
+*.webm
+*.mkv
 # IDE/OS
 .idea/
 .vscode/

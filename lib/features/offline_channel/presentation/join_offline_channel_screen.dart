@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../p2p_session/data/p2p_session_guard.dart';
+import '../../p2p_session/data/p2p_session_service.dart';
+import '../../p2p_session/presentation/p2p_session_switch_dialog.dart';
 import '../../trip_context/data/trip_context_service.dart';
 import '../../trip/data/trip_session_service.dart';
 import 'offline_channel_controller.dart';
@@ -30,11 +33,22 @@ class _JoinOfflineChannelScreenState
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     final user = ref.read(authControllerProvider).user;
-    final channel =
-        await ref.read(offlineChannelControllerProvider.notifier).joinChannel(
-              user: user,
-              channelCode: _codeController.text,
-            );
+    final action = await _resolveSwitchAction(_codeController.text);
+    if (action == P2PSessionSwitchAction.cancel) return;
+    if (action == P2PSessionSwitchAction.disconnectAndSwitch) {
+      await ref
+          .read(p2pSessionGuardProvider)
+          .disconnectActiveSession(reason: 'switch_trip');
+    }
+    final controller = ref.read(offlineChannelControllerProvider.notifier);
+    final channel = action == P2PSessionSwitchAction.createInactive
+        ? await controller.joinChannelAsInactive(
+            channelCode: _codeController.text,
+          )
+        : await controller.joinChannel(
+            user: user,
+            channelCode: _codeController.text,
+          );
     if (channel != null && mounted) {
       ref.invalidate(offlineChannelListProvider);
       ref.invalidate(activeOfflineChannelProvider);
@@ -44,6 +58,21 @@ class _JoinOfflineChannelScreenState
       ref.invalidate(activeTripProvider);
       context.go('/offline-channel/${channel.channelId}');
     }
+  }
+
+  Future<P2PSessionSwitchAction> _resolveSwitchAction(
+      String channelCode) async {
+    final session =
+        await ref.read(p2pSessionServiceProvider).getActiveSession();
+    if (session == null || !session.blocksTripSwitch) {
+      return P2PSessionSwitchAction.disconnectAndSwitch;
+    }
+    if (!mounted) return P2PSessionSwitchAction.cancel;
+    return showP2PSessionSwitchDialog(
+      context: context,
+      currentTripName: session.channelCode,
+      newTripName: channelCode.trim(),
+    );
   }
 
   @override
@@ -63,7 +92,7 @@ class _JoinOfflineChannelScreenState
                 borderRadius: BorderRadius.circular(18),
               ),
               child: const Text(
-                'Channel membership will be verified with nearby devices in the peer discovery phase.',
+                'Channel membership will be checked when nearby phones connect.',
               ),
             ),
             const SizedBox(height: 16),

@@ -30,7 +30,7 @@ class PeerCard extends StatelessWidget {
         : connecting
             ? 'Connecting...'
             : peer.status == PeerConnectionStatus.lost
-                ? 'Rediscover peer'
+                ? 'Find phone again'
                 : 'Connect';
     return Card(
       child: Padding(
@@ -80,6 +80,10 @@ class PeerCard extends StatelessWidget {
                   icon: Icons.schedule_rounded,
                   label: 'Seen ${DateFormat('HH:mm').format(peer.lastSeenAt)}',
                 ),
+                _InfoPill(
+                  icon: _validationIcon(peer.verificationStatus),
+                  label: _validationLabel(peer.verificationStatus),
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -106,6 +110,24 @@ class PeerCard extends StatelessWidget {
       ),
     );
   }
+}
+
+IconData _validationIcon(String status) {
+  return switch (status) {
+    'verified_member' => Icons.verified_user_rounded,
+    'cached_member' => Icons.badge_rounded,
+    'mismatch' => Icons.warning_rounded,
+    _ => Icons.help_outline_rounded,
+  };
+}
+
+String _validationLabel(String status) {
+  return switch (status) {
+    'verified_member' => 'Verified member',
+    'cached_member' => 'Cached member',
+    'mismatch' => 'Trip mismatch',
+    _ => 'Unknown phone',
+  };
 }
 
 class _InfoPill extends StatelessWidget {

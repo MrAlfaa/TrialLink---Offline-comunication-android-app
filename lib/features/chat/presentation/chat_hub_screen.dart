@@ -261,7 +261,7 @@ class _TripMessageShortcuts extends StatelessWidget {
               ),
             if (trip.isOffline && channel != null) ...[
               _ShortcutButton(
-                label: 'Nearby Peers',
+                label: 'Connect Phones',
                 icon: Icons.people_alt_rounded,
                 onTap: () => context.go('/nearby-peers'),
               ),

@@ -6,6 +6,10 @@ abstract class NearbyPacketTransport {
     required String displayName,
     required String activeChannelId,
     required String activeChannelCode,
+    String? tripId,
+    String? publicUserId,
+    String? appDeviceId,
+    List<String> capabilities = const ['text'],
   });
 
   Future<void> stopAdvertising();
@@ -20,10 +24,16 @@ abstract class NearbyPacketTransport {
 
   Future<void> disconnectFromPeer(String endpointId);
 
+  Future<void> disconnectAllPeers();
+
   Future<void> sendPacket({
     required String endpointId,
     required String packetJson,
   });
+
+  bool isConnected(String endpointId);
+
+  List<NearbyPeerModel> connectedPeersForChannel(String channelCode);
 
   Stream<NearbyPeerModel> get peerDiscoveredStream;
 

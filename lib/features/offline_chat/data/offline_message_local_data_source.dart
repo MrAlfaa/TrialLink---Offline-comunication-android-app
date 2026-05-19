@@ -14,6 +14,7 @@ class OfflineMessageLocalDataSource {
   final LocalDatabase _database;
 
   Future<List<OfflineTextMessageModel>> getMessages(String channelId) async {
+    await reconcileAcknowledgedMessages(channelId);
     final db = await _database.database;
     final rows = await db.query(
       'offline_messages',
@@ -44,13 +45,24 @@ class OfflineMessageLocalDataSource {
     return rows.isNotEmpty;
   }
 
-  Future<void> updateMessageStatus({
+  Future<OfflineTextMessageModel?> getMessage(String messageId) async {
+    final db = await _database.database;
+    final rows = await db.query(
+      'offline_messages',
+      where: 'message_id = ?',
+      whereArgs: [messageId],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : OfflineTextMessageModel.fromDb(rows.first);
+  }
+
+  Future<int> updateMessageStatus({
     required String messageId,
     required String deliveryStatus,
     String? ackStatus,
   }) async {
     final db = await _database.database;
-    await db.update(
+    return db.update(
       'offline_messages',
       {
         'delivery_status': deliveryStatus,
@@ -62,13 +74,13 @@ class OfflineMessageLocalDataSource {
     );
   }
 
-  Future<void> updateMessageStatusByPacket({
+  Future<int> updateMessageStatusByPacket({
     required String packetId,
     required String deliveryStatus,
     String? ackStatus,
   }) async {
     final db = await _database.database;
-    await db.update(
+    return db.update(
       'offline_messages',
       {
         'delivery_status': deliveryStatus,
@@ -77,6 +89,86 @@ class OfflineMessageLocalDataSource {
       },
       where: 'packet_id = ?',
       whereArgs: [packetId],
+    );
+  }
+
+  Future<int> markMessageSentAfterTransfer({
+    required String messageId,
+    required String packetId,
+    required bool requiresAck,
+  }) async {
+    final db = await _database.database;
+    return db.transaction((txn) async {
+      final rows = await txn.query(
+        'offline_messages',
+        where: 'message_id = ?',
+        whereArgs: [messageId],
+        limit: 1,
+      );
+      if (rows.isEmpty) return 0;
+
+      final message = OfflineTextMessageModel.fromDb(rows.first);
+      if (message.ackStatus == 'acknowledged') {
+        return 0;
+      }
+
+      final ackRows = await txn.query(
+        'offline_acks',
+        where: 'ack_for_message_id = ? OR ack_for_packet_id = ?',
+        whereArgs: [messageId, packetId],
+        limit: 1,
+      );
+      if (ackRows.isNotEmpty) {
+        return txn.update(
+          'offline_messages',
+          {
+            'delivery_status': 'delivered',
+            'ack_status': 'acknowledged',
+            'updated_at': DateTime.now().toIso8601String(),
+          },
+          where: 'message_id = ?',
+          whereArgs: [messageId],
+        );
+      }
+
+      return txn.update(
+        'offline_messages',
+        {
+          'delivery_status': 'sent',
+          'ack_status': requiresAck ? 'waiting' : 'none',
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        where: 'message_id = ? AND ack_status != ?',
+        whereArgs: [messageId, 'acknowledged'],
+      );
+    });
+  }
+
+  Future<int> reconcileAcknowledgedMessages(String channelId) async {
+    final db = await _database.database;
+    return db.rawUpdate(
+      '''
+      UPDATE offline_messages
+      SET delivery_status = ?,
+          ack_status = ?,
+          updated_at = ?
+      WHERE channel_id = ?
+        AND is_mine = 1
+        AND ack_status != ?
+        AND EXISTS (
+          SELECT 1
+          FROM offline_acks
+          WHERE offline_acks.ack_for_message_id = offline_messages.message_id
+             OR offline_acks.ack_for_packet_id = offline_messages.packet_id
+        )
+      ''',
+      [
+        'delivered',
+        'acknowledged',
+        DateTime.now().toIso8601String(),
+        channelId,
+        'acknowledged',
+      ],
     );
   }
 
@@ -172,6 +264,20 @@ class OfflineMessageLocalDataSource {
       ack.toDbMap(),
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
+  }
+
+  Future<bool> ackExistsForMessage({
+    required String messageId,
+    required String packetId,
+  }) async {
+    final db = await _database.database;
+    final rows = await db.query(
+      'offline_acks',
+      where: 'ack_for_message_id = ? OR ack_for_packet_id = ?',
+      whereArgs: [messageId, packetId],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
   }
 
   Future<List<NearbyPeerModel>> getConnectedPeers(String channelCode) async {

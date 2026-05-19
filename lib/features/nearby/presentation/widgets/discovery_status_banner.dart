@@ -25,7 +25,7 @@ class DiscoveryStatusBanner extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Discovery Status',
+            Text('Phone Connection',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 12),
             Wrap(
@@ -33,11 +33,11 @@ class DiscoveryStatusBanner extends StatelessWidget {
               runSpacing: 8,
               children: [
                 _StatusPill(
-                  label: 'Advertising ${isAdvertising ? "On" : "Off"}',
+                  label: 'Visible ${isAdvertising ? "On" : "Off"}',
                   active: isAdvertising,
                 ),
                 _StatusPill(
-                  label: 'Discovery ${isDiscovering ? "On" : "Off"}',
+                  label: 'Finding ${isDiscovering ? "On" : "Off"}',
                   active: isDiscovering,
                 ),
                 _StatusPill(

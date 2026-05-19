@@ -92,7 +92,7 @@ void main() {
           .readAsStringSync();
 
       expect(pubspec, contains('flutter_sound:'));
-      expect(db, contains('version: 20'));
+      expect(db, contains('version: 22'));
       expect(db, contains('live_radio_sessions'));
       expect(router, contains("case 'live_audio_start':"));
       expect(router, contains("case 'live_audio_chunk':"));

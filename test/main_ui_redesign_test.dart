@@ -103,7 +103,7 @@ void main() {
         home: Scaffold(
           appBar: ChatAppBar(
             title: 'Knuckles Hiking Team',
-            subtitle: 'Cloud chat - Offline fallback',
+            subtitle: 'Cloud chat - Offline backup',
             chips: [
               ChatHeaderChip(
                 label: 'Saved locally',
@@ -123,7 +123,7 @@ void main() {
     );
 
     expect(find.text('Knuckles Hiking Team'), findsOneWidget);
-    expect(find.text('Cloud chat - Offline fallback'), findsOneWidget);
+    expect(find.text('Cloud chat - Offline backup'), findsOneWidget);
     expect(find.text('Saved locally'), findsOneWidget);
     expect(find.text('3 pending'), findsOneWidget);
     expect(find.text('Offline Mode'), findsNothing);
@@ -177,10 +177,10 @@ void main() {
     expect(find.text('Unstable'), findsOneWidget);
     expect(find.text('Sync ready'), findsOneWidget);
     expect(find.text('Sync paused'), findsOneWidget);
-    expect(find.text('Queued'), findsOneWidget);
-    expect(find.text('No peers'), findsOneWidget);
-    expect(find.text('1 peer'), findsOneWidget);
-    expect(find.text('3 peers'), findsOneWidget);
+    expect(find.text('Waiting to send'), findsOneWidget);
+    expect(find.text('No phones'), findsOneWidget);
+    expect(find.text('1 phone'), findsOneWidget);
+    expect(find.text('3 phones'), findsOneWidget);
   });
 
   test('normal feature screens do not render large connection mode banners',

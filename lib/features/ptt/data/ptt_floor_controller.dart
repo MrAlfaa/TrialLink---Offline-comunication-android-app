@@ -102,9 +102,10 @@ class PttFloorController {
 
   Future<String> handleIncomingRequest({
     required OfflinePacketModel packet,
+    String? contextIdOverride,
   }) async {
     final contextType = 'offline_channel';
-    final contextId = packet.channelId;
+    final contextId = contextIdOverride ?? packet.channelId;
     final current = stateFor(contextType: contextType, contextId: contextId);
     final incomingId = packet.senderLocalId ?? packet.senderId;
     if (!current.hasSpeaker) {
@@ -148,11 +149,12 @@ class PttFloorController {
 
   Future<String> handleIncomingRelease({
     required OfflinePacketModel packet,
+    String? contextIdOverride,
   }) async {
     await release(
       contextType: 'offline_channel',
-      contextId: packet.channelId,
-      speakerId: packet.senderId,
+      contextId: contextIdOverride ?? packet.channelId,
+      speakerId: packet.senderLocalId ?? packet.senderId,
       speakerName: packet.senderName,
     );
     return 'PTT channel is free.';

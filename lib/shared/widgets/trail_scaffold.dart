@@ -42,6 +42,7 @@ class _TrailScaffoldState extends ConsumerState<TrailScaffold> {
         bottomNavigationBar: TrailBottomNav(
           location: location,
           mode: mode,
+          effectiveMode: modeState.effectiveMode,
           modeButtonEnabled: modeButtonEnabled,
           onModePressed: () {
             if (!modeButtonEnabled) {
@@ -79,7 +80,14 @@ class _TrailScaffoldState extends ConsumerState<TrailScaffold> {
       context.go('/settings');
       return;
     }
-    const rootTabs = {'/home', '/chat', '/map', '/sos'};
+    const rootTabs = {
+      '/home',
+      '/chat',
+      '/map',
+      '/sos',
+      '/nearby-peers',
+      '/offline-channel',
+    };
     if (!rootTabs.contains(location)) {
       context.go('/home');
       return;

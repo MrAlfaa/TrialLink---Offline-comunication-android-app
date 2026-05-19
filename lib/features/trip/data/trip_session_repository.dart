@@ -49,10 +49,22 @@ class TripSessionRepository {
     return rows.map(TripSessionModel.fromDb).toList();
   }
 
+  Future<TripSessionModel?> getTrip(String tripId) async {
+    final db = await _database.database;
+    final rows = await db.query(
+      'trip_sessions',
+      where: 'trip_id = ?',
+      whereArgs: [tripId],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : TripSessionModel.fromDb(rows.first);
+  }
+
   Future<TripSessionModel> createOfflineTrip({
     required String tripName,
     required LocalIdentityModel identity,
     String? customChannelCode,
+    bool activate = true,
   }) async {
     _validateTripName(tripName);
     final channel = await _offlineChannelRepository.createChannelForIdentity(
@@ -60,6 +72,7 @@ class TripSessionRepository {
       channelName: tripName.trim(),
       description: 'Offline trip channel for ${tripName.trim()}.',
       customCode: customChannelCode,
+      activate: activate,
     );
     return createTripFromOfflineChannel(
       tripName: tripName,
@@ -67,6 +80,7 @@ class TripSessionRepository {
       channelCode: channel.channelCode,
       channelName: channel.channelName,
       localIdentityId: identity.localUserId,
+      activate: activate,
     );
   }
 
@@ -74,11 +88,13 @@ class TripSessionRepository {
     required String tripName,
     required LocalIdentityModel identity,
     String? customChannelCode,
+    bool activate = true,
   }) {
     return createOfflineTrip(
       tripName: tripName,
       identity: identity,
       customChannelCode: customChannelCode,
+      activate: activate,
     );
   }
 
@@ -123,11 +139,13 @@ class TripSessionRepository {
     required String channelCode,
     required LocalIdentityModel identity,
     String? tripName,
+    bool activate = true,
   }) async {
     final normalized = normalizeChannelCode(channelCode);
     final channel = await _offlineChannelRepository.joinChannelForIdentity(
       identity: identity,
       channelCode: normalized,
+      activate: activate,
     );
     return createTripFromOfflineChannel(
       tripName: (tripName?.trim().isNotEmpty ?? false)
@@ -137,6 +155,7 @@ class TripSessionRepository {
       channelCode: channel.channelCode,
       channelName: channel.channelName,
       localIdentityId: identity.localUserId,
+      activate: activate,
     );
   }
 
@@ -190,6 +209,7 @@ class TripSessionRepository {
     required String channelCode,
     required String localIdentityId,
     String? channelName,
+    bool activate = true,
   }) async {
     _validateTripName(tripName);
     final trip = _buildTrip(
@@ -201,7 +221,7 @@ class TripSessionRepository {
       channelCode: normalizeChannelCode(channelCode),
       channelName: channelName,
     );
-    return _insertAsActive(trip);
+    return activate ? _insertAsActive(trip) : _insertAsInactive(trip);
   }
 
   Future<TripSessionModel> activateOfflineChannelTrip({
@@ -423,6 +443,39 @@ class TripSessionRepository {
     return (await getActiveTrip()) ?? trip;
   }
 
+  Future<TripSessionModel> _insertAsInactive(TripSessionModel trip) async {
+    final db = await _database.database;
+    final now = DateTime.now().toIso8601String();
+    final values = trip.toDbMap()
+      ..['status'] = 'inactive'
+      ..['updated_at'] = now;
+    await db.transaction((txn) async {
+      await txn.insert(
+        'trip_sessions',
+        values,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      if ((trip.offlineChannelId ?? '').isNotEmpty) {
+        await txn.update(
+          'offline_channels',
+          {
+            'trip_id': trip.tripId,
+            'is_primary': 1,
+            'is_active': 0,
+            'channel_status': 'inactive',
+            'last_opened_at': now,
+            'updated_at': now,
+          },
+          where: 'channel_id = ?',
+          whereArgs: [trip.offlineChannelId],
+        );
+      }
+    });
+    final inactive = TripSessionModel.fromDb(values);
+    await _ensureDefaultChatForTrip(inactive);
+    return inactive;
+  }
+
   Future<void> _updateStatus(
     String tripId,
     String status, {
@@ -531,7 +584,7 @@ class TripSessionRepository {
         'chat_name': 'General',
         'chat_type': chatType,
         'is_default': 1,
-        'is_active': 1,
+        'is_active': trip.isActive ? 1 : 0,
         'chat_status': 'active',
         'created_at': now,
         'updated_at': now,

@@ -374,7 +374,7 @@ class _DashboardHeroCard extends StatelessWidget {
     final syncLabel = modeState.effectiveMode == EffectiveMode.online
         ? modeState.backendReachable
             ? 'Ready'
-            : 'Queued'
+            : 'Waiting to send'
         : 'Paused';
 
     return Container(
@@ -762,7 +762,7 @@ List<_ActionSpec> _actionsFor({
     ];
   }
 
-  return [
+  final offlineActions = [
     _ActionSpec(
       'Channels',
       'Offline channel setup',
@@ -780,32 +780,32 @@ List<_ActionSpec> _actionsFor({
       () => context.go('/chat?tab=offline'),
     ),
     _ActionSpec(
-      'Nearby Peers',
-      'Discover connected phones',
+      'Connect phones',
+      'Find teammates on this channel',
       Icons.radar_rounded,
       AppColors.signalOrange,
       'nearby_discovery',
       () => context.go('/nearby-peers'),
     ),
     _ActionSpec(
-      'SOS',
-      'Broadcast emergency alert',
+      'Send SOS',
+      'Alert teammates for help',
       Icons.emergency_share_rounded,
       AppColors.danger,
       'offline_sos',
       () => context.go('/sos'),
     ),
     _ActionSpec(
-      'Location',
-      'Share local position safely',
+      'Share location',
+      'Send your latest position',
       Icons.location_on_rounded,
       AppColors.success,
       'offline_location_share',
       () => context.go('/map'),
     ),
     _ActionSpec(
-      'PTT',
-      'Voice-note and live radio',
+      'Talk',
+      'Voice notes and live radio',
       Icons.record_voice_over_rounded,
       AppColors.signalOrange,
       'voice_note_ptt',
@@ -820,6 +820,8 @@ List<_ActionSpec> _actionsFor({
       () => context.go('/connectivity'),
     ),
   ];
+
+  return offlineActions;
 }
 
 String _modeChipLabel(ModeState state) {

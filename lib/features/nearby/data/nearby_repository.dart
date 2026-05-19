@@ -13,11 +13,19 @@ class NearbyRepository {
     NearbyPermissionService? permissions,
   })  : _transport = transport,
         _local = local ?? NearbyLocalDataSource(),
-        _permissions = permissions ?? NearbyPermissionService();
+        _permissions = permissions ?? NearbyPermissionService() {
+    _subscriptions
+      ..add(_transport.peerDiscoveredStream.listen(_persistPeer))
+      ..add(_transport.peerConnectionChangedStream.listen(_persistPeer))
+      ..add(_transport.peerLostStream.listen((endpointId) {
+        unawaited(markLost(endpointId));
+      }));
+  }
 
   final NearbyPacketTransport _transport;
   final NearbyLocalDataSource _local;
   final NearbyPermissionService _permissions;
+  final List<StreamSubscription<dynamic>> _subscriptions = [];
 
   Stream<NearbyPeerModel> get peerDiscoveredStream =>
       _transport.peerDiscoveredStream;
@@ -34,6 +42,22 @@ class NearbyRepository {
     return _local.getPeersForChannel(channelCode);
   }
 
+  Future<List<NearbyPeerModel>> connectedPeers(String channelCode) async {
+    final stored = await _local.getPeersForChannel(channelCode);
+    final live = _transport.connectedPeersForChannel(channelCode);
+    final liveEndpointIds = live.map((peer) => peer.endpointId).toSet();
+    for (final peer in live) {
+      unawaited(_local.upsertPeer(peer));
+    }
+    for (final peer in stored) {
+      if (peer.status == PeerConnectionStatus.connected &&
+          !liveEndpointIds.contains(peer.endpointId)) {
+        unawaited(markLost(peer.endpointId));
+      }
+    }
+    return live.toList()..sort((a, b) => b.lastSeenAt.compareTo(a.lastSeenAt));
+  }
+
   Future<void> savePeer(NearbyPeerModel peer) => _local.upsertPeer(peer);
 
   Future<void> markLost(String endpointId) {
@@ -45,12 +69,20 @@ class NearbyRepository {
     required String displayName,
     required String activeChannelId,
     required String activeChannelCode,
+    String? tripId,
+    String? publicUserId,
+    String? appDeviceId,
+    List<String> capabilities = const ['text'],
   }) {
     return _transport.startAdvertising(
       userId: userId,
       displayName: displayName,
       activeChannelId: activeChannelId,
       activeChannelCode: activeChannelCode,
+      tripId: tripId,
+      publicUserId: publicUserId,
+      appDeviceId: appDeviceId,
+      capabilities: capabilities,
     );
   }
 
@@ -70,13 +102,38 @@ class NearbyRepository {
     return _transport.disconnectFromPeer(endpointId);
   }
 
+  Future<void> disconnectAllPeers() {
+    return _transport.disconnectAllPeers();
+  }
+
   Future<void> sendPacket({
     required String endpointId,
     required String packetJson,
-  }) {
-    return _transport.sendPacket(
-      endpointId: endpointId,
-      packetJson: packetJson,
-    );
+  }) async {
+    if (!_transport.isConnected(endpointId)) {
+      await markLost(endpointId);
+      throw StateError(
+        'Nearby endpoint $endpointId is not currently connected.',
+      );
+    }
+    try {
+      await _transport.sendPacket(
+        endpointId: endpointId,
+        packetJson: packetJson,
+      );
+    } catch (error) {
+      await markLost(endpointId);
+      throw StateError('Nearby packet send failed: $error');
+    }
+  }
+
+  Future<void> dispose() async {
+    for (final subscription in _subscriptions) {
+      await subscription.cancel();
+    }
+  }
+
+  void _persistPeer(NearbyPeerModel peer) {
+    unawaited(_local.upsertPeer(peer));
   }
 }

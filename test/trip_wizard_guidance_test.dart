@@ -69,7 +69,7 @@ void main() {
 
     expect(howItWorks, contains('Start or join a trip'));
     expect(howItWorks, contains('Data saves locally first'));
-    expect(manual, contains('Two-device P2P test'));
+    expect(manual, contains('Two-phone connection test'));
     expect(manual, contains('Device A'));
     expect(manual, contains('Device B'));
   });

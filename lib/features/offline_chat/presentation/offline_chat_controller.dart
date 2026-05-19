@@ -140,8 +140,8 @@ class OfflineChatController extends StateNotifier<OfflineChatState> {
       state = state.copyWith(
         isSending: false,
         infoMessage: hasPeers
-            ? 'Message sent to nearby peers.'
-            : 'Message saved. It will be sent when a peer connects.',
+            ? 'Message sent to nearby phones.'
+            : 'Message saved. It will send when a phone connects.',
       );
     } catch (error) {
       state = state.copyWith(
@@ -168,9 +168,7 @@ class OfflineChatController extends StateNotifier<OfflineChatState> {
   void _scheduleAckTimeout(String messageId) {
     _ackTimers[messageId]?.cancel();
     _ackTimers[messageId] = Timer(const Duration(seconds: 15), () async {
-      final current = state.messages.where((m) => m.messageId == messageId);
-      if (current.isEmpty || current.first.ackStatus == 'acknowledged') return;
-      await _repository.markAckTimeout(messageId);
+      await _repository.markAckTimeoutIfStillWaiting(messageId);
       await refresh();
     });
   }

@@ -2,6 +2,7 @@ import '../../../core/mode/mode_models.dart';
 import '../../../core/settings/settings_service.dart';
 import '../../connectivity_intelligence/data/connectivity_intelligence_repository.dart';
 import '../../connectivity_intelligence/data/models/signal_quality_label.dart';
+import '../../nearby/data/nearby_repository.dart';
 import '../../offline_channel/data/models/offline_channel_model.dart';
 import 'live_radio_audio_service.dart';
 import 'ptt_local_data_source.dart';
@@ -26,15 +27,18 @@ class LiveRadioEligibilityService {
     PttLocalDataSource? local,
     ConnectivityIntelligenceRepository? connectivity,
     LiveRadioAudioService? audio,
+    NearbyRepository? nearby,
   })  : _settings = settings,
         _local = local ?? PttLocalDataSource(),
         _connectivity = connectivity ?? ConnectivityIntelligenceRepository(),
-        _audio = audio ?? LiveRadioAudioService();
+        _audio = audio ?? LiveRadioAudioService(),
+        _nearby = nearby;
 
   final SettingsService _settings;
   final PttLocalDataSource _local;
   final ConnectivityIntelligenceRepository _connectivity;
   final LiveRadioAudioService _audio;
+  final NearbyRepository? _nearby;
 
   Future<LiveRadioEligibilityResult> evaluate({
     required EffectiveMode effectiveMode,
@@ -69,7 +73,9 @@ class LiveRadioEligibilityService {
         connectedPeerCount: 0,
       );
     }
-    final peers = await _local.connectedPeers(channel.channelCode);
+    final peers = _nearby == null
+        ? await _local.connectedPeers(channel.channelCode)
+        : await _nearby.connectedPeers(channel.channelCode);
     if (peers.isEmpty) {
       return LiveRadioEligibilityResult(
         allowed: false,

@@ -5,8 +5,13 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/identity/current_user_actor.dart';
 import '../../../core/mode/mode_controller.dart';
+import '../../../shared/widgets/compact_status_chip.dart';
 import '../../../shared/widgets/mode_status_widgets.dart';
-import '../../offline_channel/presentation/offline_channel_controller.dart';
+import '../../p2p_session/data/p2p_session_guard.dart';
+import '../../p2p_session/data/p2p_session_service.dart';
+import '../../p2p_session/data/models/p2p_session_model.dart';
+import '../../p2p_session/data/models/p2p_session_state.dart';
+import '../../trip_context/data/trip_context_service.dart';
 import 'nearby_controller.dart';
 import 'widgets/discovery_status_banner.dart';
 import 'widgets/nearby_permission_notice.dart';
@@ -18,11 +23,12 @@ class NearbyPeersScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final actor = ref.watch(currentUserActorProvider);
-    final activeChannel = ref.watch(activeUsableOfflineChannelProvider);
+    final activeContext = ref.watch(activeTripContextProvider);
+    final activeSession = ref.watch(activeP2PSessionProvider);
     final modeState = ref.watch(modeControllerProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Nearby Peers')),
+      appBar: AppBar(title: const Text('Connect Phones')),
       body: SafeArea(
         child: actor.when(
           data: (user) {
@@ -32,17 +38,26 @@ class NearbyPeersScreen extends ConsumerWidget {
                     Text('Create your TrailLink profile before using Nearby.'),
               );
             }
-            return activeChannel.when(
-              data: (channel) {
+            return activeContext.when(
+              data: (tripContext) {
+                final channel = tripContext?.activeChannel;
                 if (channel == null) {
                   return _NoActiveChannel(
                     onOpenChannels: () => context.go('/offline-channel'),
                   );
                 }
-                final args = NearbySessionArgs(channel: channel, user: user);
+                final args = NearbySessionArgs(
+                  tripId: tripContext!.trip.tripId,
+                  channel: channel,
+                  user: user,
+                );
                 final state = ref.watch(nearbyControllerProvider(args));
                 final controller =
                     ref.read(nearbyControllerProvider(args).notifier);
+                final session = activeSession.asData?.value;
+                final connectedToAnotherTrip = session != null &&
+                    session.tripId != tripContext.trip.tripId &&
+                    session.blocksTripSwitch;
 
                 return RefreshIndicator(
                   onRefresh: controller.refreshPeers,
@@ -53,6 +68,10 @@ class NearbyPeersScreen extends ConsumerWidget {
                         children: [
                           ModeStatusChip(state: modeState),
                           PeerStatusChip(count: state.connectedCount),
+                          _P2PStatusChip(
+                            session: session,
+                            currentTripId: tripContext.trip.tripId,
+                          ),
                           SyncStatusChip(
                             status: state.connectedCount > 0
                                 ? SyncChipStatus.ready
@@ -60,6 +79,21 @@ class NearbyPeersScreen extends ConsumerWidget {
                           ),
                         ],
                       ),
+                      if (connectedToAnotherTrip) ...[
+                        const SizedBox(height: 14),
+                        _SessionMismatchWarning(
+                          session: session,
+                          onDisconnect: () async {
+                            await ref
+                                .read(p2pSessionGuardProvider)
+                                .disconnectActiveSession(
+                                  reason: 'switch_trip',
+                                );
+                            ref.invalidate(activeP2PSessionProvider);
+                          },
+                          onOpenCurrentTrip: () => context.go('/trips'),
+                        ),
+                      ],
                       const SizedBox(height: 14),
                       Card(
                         child: Padding(
@@ -121,28 +155,28 @@ class NearbyPeersScreen extends ConsumerWidget {
                                 ? null
                                 : controller.startAdvertising,
                             icon: const Icon(Icons.campaign_rounded),
-                            label: const Text('Start Advertising'),
+                            label: const Text('Make my phone visible'),
                           ),
                           OutlinedButton.icon(
                             onPressed: state.isBusy || !state.isAdvertising
                                 ? null
                                 : controller.stopAdvertising,
                             icon: const Icon(Icons.stop_circle_rounded),
-                            label: const Text('Stop Advertising'),
+                            label: const Text('Hide my phone'),
                           ),
                           FilledButton.tonalIcon(
                             onPressed: state.isBusy || state.isDiscovering
                                 ? null
                                 : controller.startDiscovery,
                             icon: const Icon(Icons.radar_rounded),
-                            label: const Text('Start Discovery'),
+                            label: const Text('Find nearby phones'),
                           ),
                           OutlinedButton.icon(
                             onPressed: state.isBusy || !state.isDiscovering
                                 ? null
                                 : controller.stopDiscovery,
                             icon: const Icon(Icons.pause_circle_rounded),
-                            label: const Text('Stop Discovery'),
+                            label: const Text('Stop finding phones'),
                           ),
                         ],
                       ),
@@ -231,9 +265,95 @@ class _NearbyErrorNotice extends StatelessWidget {
   }
 }
 
+class _P2PStatusChip extends StatelessWidget {
+  const _P2PStatusChip({
+    required this.session,
+    required this.currentTripId,
+  });
+
+  final P2PSessionModel? session;
+  final String currentTripId;
+
+  @override
+  Widget build(BuildContext context) {
+    final connectedElsewhere =
+        session != null && session!.tripId != currentTripId;
+    final label = connectedElsewhere
+        ? 'Connected to another trip'
+        : switch (session?.state) {
+            P2PSessionState.connected => 'Connected to current trip',
+            P2PSessionState.connecting => 'Connecting',
+            P2PSessionState.advertising => 'Visible',
+            P2PSessionState.discovering => 'Finding phones',
+            _ => 'Disconnected',
+          };
+    final color = connectedElsewhere
+        ? AppColors.warning
+        : session?.state == P2PSessionState.connected
+            ? AppColors.success
+            : AppColors.muted;
+    return CompactStatusChip(
+      label: label,
+      color: color,
+      icon: connectedElsewhere
+          ? Icons.warning_amber_rounded
+          : Icons.bluetooth_connected_rounded,
+    );
+  }
+}
+
+class _SessionMismatchWarning extends StatelessWidget {
+  const _SessionMismatchWarning({
+    required this.session,
+    required this.onDisconnect,
+    required this.onOpenCurrentTrip,
+  });
+
+  final P2PSessionModel session;
+  final Future<void> Function() onDisconnect;
+  final VoidCallback onOpenCurrentTrip;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: AppColors.warning.withValues(alpha: 0.10),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'You are connected to another trip.',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Your nearby connection is for ${session.channelCode}. Disconnect it before using this trip.',
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              children: [
+                FilledButton(
+                  onPressed: () async => onDisconnect(),
+                  child: const Text('Disconnect & Switch'),
+                ),
+                OutlinedButton(
+                  onPressed: onOpenCurrentTrip,
+                  child: const Text('Open Current Trip'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 String _nearbyNoticeBody(String value) {
   if (value.contains('PlatformException')) {
-    return 'Nearby connection failed. Start discovery again and keep both phones close with Nearby open.';
+    return 'Nearby connection failed. Find phones again and keep both phones close with TrailLink open.';
   }
   return value;
 }
@@ -285,13 +405,13 @@ class _EmptyPeers extends StatelessWidget {
                 size: 46, color: AppColors.muted),
             const SizedBox(height: 10),
             Text(
-              'No nearby TrailLink users found on this channel.',
+              'No nearby phones found on this channel.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 6),
             Text(
-              'Start advertising and discovery on both phones using the same channel code.',
+              'Make one phone visible and tap Find nearby phones on the other phone using the same channel code.',
               textAlign: TextAlign.center,
               style: Theme.of(context)
                   .textTheme
