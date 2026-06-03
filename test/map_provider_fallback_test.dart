@@ -110,6 +110,9 @@ void main() {
     );
     expect(source,
         isNot(contains('Map tiles need internet unless already cached')));
+    expect(source, contains('Last saved nearby location'));
+    expect(source, contains('Nearby phone'));
+    expect(source, isNot(contains(r'${location.source}')));
   });
 
   test('teammate location query does not pass null whereArgs', () {

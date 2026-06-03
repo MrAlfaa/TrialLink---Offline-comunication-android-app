@@ -37,12 +37,12 @@ const cloudPreparedJoinValidation = [
   body('tripCode')
     .optional({ checkFalsy: true })
     .trim()
-    .matches(/^TL-[A-Z0-9]{5}$/)
+    .matches(/^TL-(?:[A-Z0-9]{5}|ONLI-[A-Z0-9]{5})$/)
     .withMessage('Valid trip code is required'),
   body('groupCode')
     .optional({ checkFalsy: true })
     .trim()
-    .matches(/^TL-[A-Z0-9]{5}$/)
+    .matches(/^TL-(?:[A-Z0-9]{5}|ONLI-[A-Z0-9]{5})$/)
     .withMessage('Valid group code is required'),
   body().custom((value) => {
     if ((value.tripCode || value.groupCode || '').trim().length > 0) return true;

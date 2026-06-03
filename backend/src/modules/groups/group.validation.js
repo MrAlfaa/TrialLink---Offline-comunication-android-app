@@ -18,7 +18,7 @@ const createGroupValidation = [
 const joinGroupValidation = [
   body('groupCode')
     .trim()
-    .matches(/^TL-[A-Z0-9]{5}$/)
+    .matches(/^TL-(?:[A-Z0-9]{5}|ONLI-[A-Z0-9]{5})$/)
     .withMessage('Valid group code is required'),
 ];
 

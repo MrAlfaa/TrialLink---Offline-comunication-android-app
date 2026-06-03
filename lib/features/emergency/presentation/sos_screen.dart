@@ -10,6 +10,7 @@ import '../../../core/offline/offline_packet_router.dart';
 import '../../../core/settings/settings_service.dart';
 import '../../../shared/widgets/compact_status_chip.dart';
 import '../../../shared/widgets/mode_status_widgets.dart';
+import '../../trip/data/trip_session_service.dart';
 import 'emergency_controller.dart';
 import 'widgets/emergency_alert_card.dart';
 
@@ -46,9 +47,18 @@ class _SosScreenState extends ConsumerState<SosScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final explicitContext =
+        widget.groupId != null || widget.offlineChannelId != null;
+    final activeTrip = explicitContext
+        ? null
+        : ref.watch(modeScopedActiveTripProvider).asData?.value;
+    final resolvedGroupId = widget.groupId ?? activeTrip?.cloudGroupId;
+    final resolvedOfflineChannelId = widget.offlineChannelId ??
+        activeTrip?.offlineChannelId ??
+        activeTrip?.activeChannelId;
     final args = EmergencyContextArgs(
-      groupId: widget.groupId,
-      offlineChannelId: widget.offlineChannelId,
+      groupId: resolvedGroupId,
+      offlineChannelId: resolvedOfflineChannelId,
     );
     final state = ref.watch(emergencyControllerProvider(args));
     final controller = ref.read(emergencyControllerProvider(args).notifier);

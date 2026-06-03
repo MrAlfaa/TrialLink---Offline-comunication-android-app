@@ -72,7 +72,7 @@ async function run() {
   };
   const createGroup = await expectStatus('POST', '/groups', groupPayload, ownerToken, 201);
   const group = createGroup.data.group;
-  assert.match(group.groupCode, /^TL-[A-Z0-9]{5}$/);
+  assert.match(group.groupCode, /^TL-ONLI-[A-Z0-9]{5}$/);
 
   const ownerGroups = await expectStatus('GET', '/groups/my', null, ownerToken, 200);
   assert.ok(ownerGroups.data.groups.some((item) => item.id === group.id));

@@ -27,7 +27,7 @@ class SocketService {
   SocketService({SecureStorageService? storage})
       : _storage = storage ?? SecureStorageService.instance;
 
-  static const socketTransports = ['websocket'];
+  static const socketTransports = ['websocket', 'polling'];
 
   final SecureStorageService _storage;
   final _statusController = StreamController<ChatSocketStatus>.broadcast();

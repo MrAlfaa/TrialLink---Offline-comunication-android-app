@@ -80,6 +80,7 @@ class CloudPreparedTripRepository {
   }) async {
     final db = await _database.database;
     final now = DateTime.now().toIso8601String();
+    final currentMemberRole = _currentMemberRole(metadata, localIdentityId);
     await db.transaction((txn) async {
       await txn.update(
         'trip_sessions',
@@ -100,7 +101,7 @@ class CloudPreparedTripRepository {
           'group_name': metadata.group.groupName,
           'group_code': metadata.group.groupCode,
           'description': null,
-          'member_role': null,
+          'member_role': currentMemberRole,
           'member_count': metadata.roster.length,
           'status': metadata.group.status,
           'source': 'cloud_prepared',
@@ -194,6 +195,7 @@ class CloudPreparedTripRepository {
         whereArgs: [metadata.channel.channelId],
       );
       for (final member in metadata.roster) {
+        final memberRole = _cloudMemberRole(metadata, member);
         await txn.insert(
           'local_group_members',
           {
@@ -203,9 +205,9 @@ class CloudPreparedTripRepository {
             'display_name': member.displayName,
             'email': null,
             'phone_number': member.phoneNumber,
-            'role': 'member',
+            'role': memberRole,
             'membership_status': 'active',
-            'presence_status': 'offline',
+            'presence_status': 'recently_active',
             'last_seen_at': member.lastSeenAt?.toIso8601String(),
             'source': 'cloud_roster',
             'created_at': now,
@@ -220,7 +222,7 @@ class CloudPreparedTripRepository {
             'user_id':
                 member.localUserId ?? member.publicUserId ?? member.userId,
             'display_name': member.displayName,
-            'member_role': 'member',
+            'member_role': memberRole,
             'source': 'cloud_roster',
             'status': 'active',
             'joined_at': now,
@@ -249,5 +251,34 @@ class CloudPreparedTripRepository {
           'Create your TrailLink profile before using cloud trips.');
     }
     return identity;
+  }
+
+  String _cloudMemberRole(
+    CloudPreparedTripMetadata metadata,
+    MemberDeviceProfileMetadata member,
+  ) {
+    final ownerIds = {
+      metadata.group.createdBy,
+      metadata.trip.ownerUserId,
+    }.whereType<String>().where((value) => value.isNotEmpty).toSet();
+    final memberIds = {
+      member.userId,
+      member.publicUserId,
+      member.localUserId,
+    }.whereType<String>().where((value) => value.isNotEmpty);
+    return memberIds.any(ownerIds.contains) ? 'owner' : 'member';
+  }
+
+  String _currentMemberRole(
+    CloudPreparedTripMetadata metadata,
+    String localIdentityId,
+  ) {
+    for (final member in metadata.roster) {
+      final matchesLocalIdentity = member.localUserId == localIdentityId ||
+          member.publicUserId == localIdentityId ||
+          member.userId == localIdentityId;
+      if (matchesLocalIdentity) return _cloudMemberRole(metadata, member);
+    }
+    return 'member';
   }
 }

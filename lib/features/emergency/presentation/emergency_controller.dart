@@ -120,7 +120,7 @@ class EmergencyController extends StateNotifier<EmergencyState> {
       groupId: args.groupId,
       offlineChannelId: args.offlineChannelId,
     );
-    final latest = await _repository.latestEvent();
+    final latest = events.isNotEmpty ? events.first : null;
     if (!mounted) return;
     state = state.copyWith(
       events: events,
