@@ -229,6 +229,7 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
   }
 
   Widget _bodyForStep() {
+    final joiningOnline = _shouldJoinOnline();
     return switch (_step) {
       0 => _ChooseTypeStep(
           selected: _type,
@@ -242,6 +243,7 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
           descriptionController: _descriptionController,
           customCodeController: _customCodeController,
           joinCodeController: _joinCodeController,
+          joiningOnline: joiningOnline,
         ),
       2 => _PreparationStep(
           loading: _loadingReadiness,
@@ -257,8 +259,17 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
           joinCode: _joinCodeController.text,
           offlineCode: _customCodeController.text,
           readiness: _readiness,
+          joiningOnline: joiningOnline,
         ),
     };
+  }
+
+  bool _shouldJoinOnline() {
+    if (_type != TripWizardType.joinExisting) return false;
+    final mode = ref.read(modeControllerProvider);
+    final access = ref.read(authAccessControllerProvider).accessState;
+    return mode.effectiveMode == EffectiveMode.online &&
+        access.canUseBackendFeatures;
   }
 
   Future<void> _next() async {
@@ -296,6 +307,7 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
                 tripName: _tripNameController.text,
                 description: _descriptionController.text,
               );
+          await _refreshOnlineAccess();
           await ref
               .read(modeControllerProvider.notifier)
               .setManualCommunicationMode(ManualCommunicationMode.online);
@@ -312,7 +324,15 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
                 .setManualCommunicationMode(ManualCommunicationMode.offline);
           }
         case TripWizardType.joinExisting:
-          if (switchAction == P2PSessionSwitchAction.createInactive) {
+          if (_shouldJoinOnline()) {
+            await ref
+                .read(cloudPreparedTripRepositoryProvider)
+                .joinCloudPreparedTrip(_joinCodeController.text);
+            await _refreshOnlineAccess();
+            await ref
+                .read(modeControllerProvider.notifier)
+                .setManualCommunicationMode(ManualCommunicationMode.online);
+          } else if (switchAction == P2PSessionSwitchAction.createInactive) {
             await ref
                 .read(tripContextServiceProvider)
                 .joinOfflineChannelAsInactiveTrip(_joinCodeController.text);
@@ -344,6 +364,17 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
       setState(() => _errorMessage = _friendlyError(error));
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _refreshOnlineAccess() async {
+    final online = await ref
+        .read(authAccessControllerProvider.notifier)
+        .refreshFromBackendSession(clearOnFailure: false);
+    if (!online) {
+      throw StateError(
+        'Your trip was saved, but the cloud session is not ready. Please reconnect your TrailLink cloud profile.',
+      );
     }
   }
 
@@ -456,6 +487,7 @@ class _CreateJoinStep extends StatelessWidget {
     required this.descriptionController,
     required this.customCodeController,
     required this.joinCodeController,
+    required this.joiningOnline,
   });
 
   final TripWizardType type;
@@ -464,6 +496,7 @@ class _CreateJoinStep extends StatelessWidget {
   final TextEditingController descriptionController;
   final TextEditingController customCodeController;
   final TextEditingController joinCodeController;
+  final bool joiningOnline;
 
   @override
   Widget build(BuildContext context) {
@@ -487,9 +520,11 @@ class _CreateJoinStep extends StatelessWidget {
                   textCapitalization: TextCapitalization.characters,
                   decoration: const InputDecoration(
                     labelText: 'Trip code',
-                    helperText:
-                        'Trip name from the owner will appear after phones connect.',
                     prefixIcon: Icon(Icons.tag_rounded),
+                  ).copyWith(
+                    helperText: joiningOnline
+                        ? 'TrailLink will load the trip name and team from the internet.'
+                        : 'Trip name from the owner will appear after phones connect.',
                   ),
                   validator: _validateCode,
                 )
@@ -576,6 +611,7 @@ class _StartTripStep extends StatelessWidget {
     required this.joinCode,
     required this.offlineCode,
     required this.readiness,
+    required this.joiningOnline,
   });
 
   final TripWizardType type;
@@ -583,6 +619,7 @@ class _StartTripStep extends StatelessWidget {
   final String joinCode;
   final String offlineCode;
   final List<_ReadinessItem> readiness;
+  final bool joiningOnline;
 
   @override
   Widget build(BuildContext context) {
@@ -599,12 +636,17 @@ class _StartTripStep extends StatelessWidget {
             const SizedBox(height: 12),
             _SummaryLine(
                 label: 'Trip', value: name.isEmpty ? 'New Trip' : name),
-            _SummaryLine(label: 'Mode', value: _typeLabel(type)),
+            _SummaryLine(
+              label: 'Mode',
+              value: joiningOnline ? 'Online trip' : _typeLabel(type),
+            ),
             _SummaryLine(
               label: 'Trip code',
-              value: offlineCode.trim().isEmpty
-                  ? 'Will be generated'
-                  : offlineCode.trim().toUpperCase(),
+              value: type == TripWizardType.joinExisting
+                  ? joinCode.trim().toUpperCase()
+                  : offlineCode.trim().isEmpty
+                      ? 'Will be generated'
+                      : offlineCode.trim().toUpperCase(),
             ),
             _SummaryLine(
               label: 'SOS',
