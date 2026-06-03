@@ -74,7 +74,7 @@ class _OfflineChatInputBarState extends State<OfflineChatInputBar> {
               Text(
                 widget.enabled
                     ? widget.queueHint ??
-                        'Media is online-only. Offline mode supports text and voice-note PTT.'
+                        'Photos need internet. Offline trips support text and voice notes.'
                     : widget.disabledMessage ?? 'This chat is read-only.',
                 key: widget.queueHint == null
                     ? null

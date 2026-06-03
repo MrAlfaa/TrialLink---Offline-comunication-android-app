@@ -18,7 +18,8 @@ void main() {
     final source =
         File('lib/features/dashboard/dashboard_screen.dart').readAsStringSync();
 
-    expect(source, contains('No Active Trip'));
+    expect(source, contains('No offline trip is active'));
+    expect(source, contains('No online trip is active'));
     expect(source, contains('Start Trip'));
     expect(source, contains('Join Trip'));
     expect(source, contains('How TrailLink Works'));
@@ -32,8 +33,8 @@ void main() {
 
     expect(source, contains('activeTripProvider'));
     expect(source, contains('Create or join a trip first'));
-    expect(source, contains('Cloud Chat'));
-    expect(source, contains('Offline Channel Chat'));
+    expect(source, contains('Online Chat'));
+    expect(source, contains('Nearby Chat'));
     expect(source, contains('Channel Details'));
   });
 
@@ -54,8 +55,8 @@ void main() {
 
     expect(source, contains('Choose Trip Type'));
     expect(source, contains('Create or Join'));
-    expect(source, contains('Communication Preparation'));
-    expect(source, contains('Readiness Check'));
+    expect(source, contains('Prepare Your Phone'));
+    expect(source, contains('Final Check'));
     expect(source, contains('Start Trip'));
     expect(source, contains('tutorial_seen'));
     expect(source, contains('coach_marks_seen'));
@@ -67,8 +68,9 @@ void main() {
     final manual = File('lib/features/help/manual_test_guide_screen.dart')
         .readAsStringSync();
 
-    expect(howItWorks, contains('Start or join a trip'));
-    expect(howItWorks, contains('Data saves locally first'));
+    expect(howItWorks, contains('Choose a trip path'));
+    expect(howItWorks, contains('Online trips use internet chat'));
+    expect(howItWorks, contains('Online trips keep nearby support ready'));
     expect(manual, contains('Two-phone connection test'));
     expect(manual, contains('Device A'));
     expect(manual, contains('Device B'));

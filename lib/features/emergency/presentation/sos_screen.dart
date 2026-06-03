@@ -98,7 +98,7 @@ class _SosScreenState extends ConsumerState<SosScreen> {
                     dense: true,
                   ),
                   const CompactStatusChip(
-                    label: 'Retry on',
+                    label: 'Retry ready',
                     color: AppColors.skyBlue,
                     icon: Icons.sync_rounded,
                     dense: true,
@@ -175,7 +175,7 @@ class _SosScreenState extends ConsumerState<SosScreen> {
                     ),
                     const SizedBox(height: 18),
                     const Text(
-                      'Use SOS only when you need urgent assistance. TrailLink will send the alert through backend and nearby peers when available.',
+                      'Use SOS only when you need urgent assistance. TrailLink will send the alert through internet or nearby phones when available.',
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 16),

@@ -105,7 +105,7 @@ void main() {
     expect(
       source,
       contains(
-        'Offline mode: map tiles may be unavailable, but saved coordinates and teammate cards remain available.',
+        'Saved coordinates stay available here. New map details may need internet.',
       ),
     );
     expect(source,

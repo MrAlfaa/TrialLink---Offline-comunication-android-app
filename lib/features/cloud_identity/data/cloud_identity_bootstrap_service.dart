@@ -48,9 +48,7 @@ class CloudIdentityBootstrapService {
         'Create your TrailLink profile before using Online Mode.',
       );
     }
-    final result = identity.isCloudReady
-        ? CloudBootstrapResult.ready(publicUserId: identity.publicUserId)
-        : await createCloudAccountFromLocalIdentity();
+    final result = await createCloudAccountFromLocalIdentity();
     if (!result.success) return result;
 
     await syncPendingData();

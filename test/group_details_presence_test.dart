@@ -160,7 +160,14 @@ void main() {
           isOnline: true,
           socketState: 'reconnecting',
         ),
-        'Offline Chat - Saved locally',
+        'Online Chat - connecting',
+      );
+      expect(
+        ChatModeLabel.cloudChatSubtitle(
+          isOnline: true,
+          socketState: 'disconnected',
+        ),
+        'Online Chat - waiting for connection',
       );
     });
   });

@@ -13,7 +13,7 @@ void main() {
       final source =
           File('lib/core/database/local_database.dart').readAsStringSync();
 
-      expect(source, contains('version: 22'));
+      expect(source, contains('version: 24'));
       expect(source, contains('active_channel_id'));
       expect(source, contains('last_opened_at'));
       expect(source, contains('trip_id'));
@@ -51,7 +51,7 @@ void main() {
       expect(source, contains("'is_active': 0"));
     });
 
-    test('legacy active providers derive from active trip context provider',
+    test('legacy active providers derive from mode-scoped context providers',
         () {
       final tripSource =
           File('lib/features/trip/data/trip_session_service.dart')
@@ -60,7 +60,8 @@ void main() {
               'lib/features/offline_channel/presentation/offline_channel_controller.dart')
           .readAsStringSync();
 
-      expect(tripSource, contains('activeTripContextProvider.future'));
+      expect(tripSource, contains('modeScopedActiveTripProvider'));
+      expect(tripSource, contains('effectiveModeProvider'));
       expect(channelSource, contains('activeTripContextProvider.future'));
       expect(channelSource, contains('switchActiveChannel(channelId)'));
     });

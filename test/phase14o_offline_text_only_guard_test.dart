@@ -37,8 +37,8 @@ void main() {
       expect(source, isNot(contains('OfflineTextOnlyFlags.enabled')));
       expect(source, contains("label: 'Home'"));
       expect(source, contains("label: 'Messages'"));
-      expect(source, contains("label: 'Connect'"));
-      expect(source, contains("context.go('/nearby-peers')"));
+      expect(source, isNot(contains("label: 'Connect'")));
+      expect(source, isNot(contains("context.go('/nearby-peers')")));
       expect(source, contains("label: 'Map'"));
       expect(source, contains("label: 'SOS'"));
       expect(source, isNot(contains("label: 'Channels'")));

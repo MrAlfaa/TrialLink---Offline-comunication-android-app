@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../nearby/data/nearby_repository.dart';
@@ -65,7 +66,25 @@ class P2PDisconnectService {
         // Disconnect still proceeds; this packet is best-effort courtesy.
       }
     }
-    await nearbyRepository.disconnectAllPeers();
-    await _sessionService.disconnectAllPeers(reason: reason);
+    Object? disconnectError;
+    try {
+      await nearbyRepository.disconnectAllPeers();
+    } catch (error) {
+      disconnectError = error;
+      if (kDebugMode) {
+        debugPrint(
+          '[TrailLink][P2PSession] Nearby disconnect failed; '
+          'clearing app session anyway: $error',
+        );
+      }
+    } finally {
+      await _sessionService.disconnectAllPeers(reason: reason);
+    }
+    if (disconnectError != null && kDebugMode) {
+      debugPrint(
+        '[TrailLink][P2PSession] Nearby transport cleanup reported an error, '
+        'but app-level P2P session is now disconnected.',
+      );
+    }
   }
 }

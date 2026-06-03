@@ -18,6 +18,7 @@
     "test:phase13h": "node scripts/phase13h-chat-media-smoke.js",
     "test:phase14g": "node scripts/phase14g-trip-context-smoke.js",
     "test:phase14j": "node scripts/phase14j-cloud-prepared-metadata-smoke.js",
+    "test:phase14s": "node scripts/phase14s-network-probe-smoke.js",
     "qa:clean-user": "node scripts/qa-clean-user-data.js"
   },
   "keywords": [

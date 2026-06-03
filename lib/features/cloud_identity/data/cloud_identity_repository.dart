@@ -64,9 +64,6 @@ class CloudIdentityRepository {
         'Create your TrailLink profile before using Online Mode.',
       );
     }
-    if (identity.isCloudReady) {
-      return CloudBootstrapResult.ready(publicUserId: identity.publicUserId);
-    }
     await _identityRepository.markCloudCreating();
 
     try {

@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../core/connectivity/connection_mode_provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/mode/mode_controller.dart';
 import '../../core/mode/mode_models.dart';
+import '../../features/groups/presentation/group_controller.dart';
 import '../../features/offline_channel/presentation/offline_channel_controller.dart';
+import '../../features/trip/data/trip_session_service.dart';
+import '../../features/trip_context/data/trip_context_service.dart';
 import 'settings_info_box.dart';
 
 class ModeBottomSheet extends ConsumerStatefulWidget {
@@ -133,12 +138,24 @@ class _ModeBottomSheetState extends ConsumerState<ModeBottomSheet> {
                   await ref
                       .read(modeControllerProvider.notifier)
                       .setManualCommunicationMode(_draftMode);
+                  ref
+                    ..invalidate(myGroupsProvider)
+                    ..invalidate(activeOfflineChannelProvider)
+                    ..invalidate(activeUsableOfflineChannelProvider)
+                    ..invalidate(activeTripChannelProvider)
+                    ..invalidate(modeScopedActiveTripProvider)
+                    ..invalidate(activeTripContextProvider)
+                    ..invalidate(activeTripProvider);
+                  await ref.read(connectionModeProvider.notifier).checkNow();
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text(_applyMessage(_draftMode))),
                     );
                   }
-                  if (context.mounted) Navigator.of(context).pop();
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                    context.go('/home');
+                  }
                 },
                 icon: const Icon(Icons.check_rounded),
                 label: const Text('Apply Mode'),

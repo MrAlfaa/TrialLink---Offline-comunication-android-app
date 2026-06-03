@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
 import '../../../core/config/env_config.dart';
+import '../../../core/notifications/trail_notification_service.dart';
 import '../../../core/storage/secure_storage_service.dart';
 import 'models/send_message_request.dart';
 
@@ -24,6 +26,8 @@ enum ChatSocketStatus {
 class SocketService {
   SocketService({SecureStorageService? storage})
       : _storage = storage ?? SecureStorageService.instance;
+
+  static const socketTransports = ['polling', 'websocket'];
 
   final SecureStorageService _storage;
   final _statusController = StreamController<ChatSocketStatus>.broadcast();
@@ -51,6 +55,9 @@ class SocketService {
 
   io.Socket? _socket;
   String? _activeGroupId;
+  String? _currentUserId;
+  Completer<void>? _connectCompleter;
+  Timer? _connectTimeout;
 
   Stream<ChatSocketStatus> get statusStream => _statusController.stream;
   Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
@@ -76,21 +83,42 @@ class SocketService {
 
   bool get isConnected => _socket?.connected == true;
 
+  void setCurrentUserId(String? userId) {
+    _currentUserId = userId;
+  }
+
   Future<void> connect() async {
     if (isConnected) return;
+    final pending = _connectCompleter;
+    if (pending != null) return pending.future;
+
+    final completer = Completer<void>();
+    _connectCompleter = completer;
+    _statusController.add(ChatSocketStatus.connecting);
 
     final token = await _storage.readToken();
     if (token == null || token.isEmpty || EnvConfig.socketBaseUrl.isEmpty) {
+      _logSocket(
+        'connect_skipped',
+        tokenPresent: token != null && token.isNotEmpty,
+        urlConfigured: EnvConfig.socketBaseUrl.isNotEmpty,
+      );
       _statusController.add(ChatSocketStatus.error);
-      return;
+      _completeConnect();
+      return completer.future;
     }
 
-    _statusController.add(ChatSocketStatus.connecting);
     _socket?.dispose();
+    _logSocket(
+      'connect_start',
+      tokenPresent: true,
+      urlConfigured: true,
+      detail: 'transports=${socketTransports.join(',')}',
+    );
     _socket = io.io(
       EnvConfig.socketBaseUrl,
       io.OptionBuilder()
-          .setTransports(['websocket'])
+          .setTransports(socketTransports)
           .setAuth({'token': token})
           .enableReconnection()
           .setReconnectionAttempts(999)
@@ -101,6 +129,8 @@ class SocketService {
 
     _socket!
       ..onConnect((_) {
+        _completeConnect();
+        _logSocket('connect_success');
         _statusController.add(ChatSocketStatus.connected);
         final groupId = _activeGroupId;
         if (groupId != null) {
@@ -108,13 +138,48 @@ class SocketService {
         }
       })
       ..onDisconnect(
-          (_) => _statusController.add(ChatSocketStatus.disconnected))
+        (reason) {
+          _logSocket('disconnect', detail: reason?.toString());
+          _statusController.add(ChatSocketStatus.disconnected);
+        },
+      )
       ..onReconnectAttempt(
-          (_) => _statusController.add(ChatSocketStatus.reconnecting))
-      ..onConnectError((_) => _statusController.add(ChatSocketStatus.error))
+        (attempt) {
+          _logSocket('reconnect_attempt', detail: attempt?.toString());
+          _statusController.add(ChatSocketStatus.reconnecting);
+        },
+      )
+      ..onConnectError((error) {
+        _logSocket('connect_error', detail: error?.toString());
+        _statusController.add(ChatSocketStatus.error);
+        _completeConnect();
+      })
+      ..onError((error) {
+        _logSocket('error', detail: error?.toString());
+        _statusController.add(ChatSocketStatus.error);
+        _completeConnect();
+      })
       ..on('new_group_message', (data) {
         if (data is Map) {
-          _messageController.add(Map<String, dynamic>.from(data));
+          final payload = Map<String, dynamic>.from(data);
+          final sender = payload['sender'] is Map
+              ? Map<String, dynamic>.from(payload['sender'] as Map)
+              : const <String, dynamic>{};
+          final senderId = sender['id']?.toString();
+          final groupId = payload['groupId']?.toString();
+          if (groupId != null &&
+              groupId.isNotEmpty &&
+              senderId != null &&
+              senderId != _currentUserId) {
+            unawaited(
+              TrailNotificationService.instance.notifyOnlineChatMessage(
+                groupId: groupId,
+                senderName: sender['fullName']?.toString(),
+                preview: payload['content']?.toString(),
+              ),
+            );
+          }
+          _messageController.add(payload);
         }
       })
       ..on('message_sent_ack', (data) {
@@ -173,6 +238,15 @@ class SocketService {
         }
       })
       ..connect();
+
+    _connectTimeout?.cancel();
+    _connectTimeout = Timer(const Duration(seconds: 10), () {
+      if (isConnected) return;
+      _logSocket('connect_timeout');
+      _statusController.add(ChatSocketStatus.error);
+      _completeConnect();
+    });
+    return completer.future;
   }
 
   void joinGroup(String groupId) {
@@ -222,9 +296,37 @@ class SocketService {
   }
 
   void disconnect() {
+    _logSocket('disconnect_requested');
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;
+    _completeConnect();
     _statusController.add(ChatSocketStatus.disconnected);
+  }
+
+  void _completeConnect() {
+    _connectTimeout?.cancel();
+    _connectTimeout = null;
+    final completer = _connectCompleter;
+    _connectCompleter = null;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete();
+    }
+  }
+
+  void _logSocket(
+    String event, {
+    bool? tokenPresent,
+    bool? urlConfigured,
+    String? detail,
+  }) {
+    if (!kDebugMode) return;
+    debugPrint(
+      '[TrailLink][Socket] event=$event '
+      'token=${tokenPresent == null ? '-' : tokenPresent ? 'present' : 'missing'} '
+      'url=${urlConfigured == null ? '-' : urlConfigured ? 'configured' : 'missing'} '
+      'connected=$isConnected '
+      'detail=${detail ?? '-'}',
+    );
   }
 }

@@ -32,7 +32,7 @@ class DashboardScreen extends ConsumerWidget {
     final activeTripChannel = ref.watch(activeTripChannelProvider);
     final authState = ref.watch(authControllerProvider);
     final authAccess = ref.watch(authAccessControllerProvider);
-    final activeTrip = ref.watch(activeTripProvider);
+    final activeTrip = ref.watch(modeScopedActiveTripProvider);
     final userName = authAccess.identity?.displayName ??
         authState.user?.fullName ??
         'Explorer';
@@ -41,7 +41,8 @@ class DashboardScreen extends ConsumerWidget {
     final channel =
         activeChannel.asData?.value ?? activeTripChannel.asData?.value;
     final trip = activeTrip.asData?.value;
-    final modeColor = _modeColor(modeState);
+    final dashboardKind = _dashboardKind(modeState, trip);
+    final modeColor = _dashboardModeColor(modeState, trip);
 
     return Scaffold(
       appBar: AppBar(
@@ -51,12 +52,17 @@ class DashboardScreen extends ConsumerWidget {
             padding: const EdgeInsets.only(right: 4),
             child: Center(
               child: CompactStatusChip(
-                label: _modeChipLabel(modeState),
+                label: _dashboardModeChipLabel(modeState, trip),
                 color: modeColor,
-                icon: modeState.userMode.icon,
+                icon: _dashboardModeIcon(modeState, trip),
                 dense: true,
               ),
             ),
+          ),
+          IconButton(
+            tooltip: 'Notifications',
+            onPressed: () => context.go('/settings/notifications'),
+            icon: const Icon(Icons.notifications_active_rounded),
           ),
           IconButton(
             tooltip: 'Settings',
@@ -91,13 +97,17 @@ class DashboardScreen extends ConsumerWidget {
             ref.invalidate(activeOfflineChannelProvider);
             ref.invalidate(activeUsableOfflineChannelProvider);
             ref.invalidate(activeTripChannelProvider);
+            ref.invalidate(modeScopedActiveTripProvider);
             await ref.read(connectionModeProvider.notifier).checkNow();
           },
           child: ListView(
             padding: const EdgeInsets.fromLTRB(18, 10, 18, 112),
             children: [
               if (trip == null)
-                _NoActiveTripDashboard(userName: userName)
+                _NoActiveTripDashboard(
+                  userName: userName,
+                  modeState: modeState,
+                )
               else ...[
                 _DashboardHeroCard(
                   userName: userName,
@@ -114,15 +124,15 @@ class DashboardScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 22),
                 _FeatureSection(
-                  title: _dashboardKind(modeState) == _DashboardKind.online
-                      ? 'Cloud Tools'
+                  title: dashboardKind == _DashboardKind.online
+                      ? 'Online Tools'
                       : 'Offline Tools',
-                  subtitle: _dashboardKind(modeState) == _DashboardKind.online
-                      ? 'Online group, map, and safety actions.'
-                      : 'Nearby, local, and safety actions.',
+                  subtitle: dashboardKind == _DashboardKind.online
+                      ? 'Internet chat, team, map, and safety actions.'
+                      : 'Nearby phones, local messages, map, and safety actions.',
                   actions: _actionsFor(
                     context: context,
-                    kind: _dashboardKind(modeState),
+                    kind: dashboardKind,
                     groups: groups,
                     activeChannel: channel,
                   ),
@@ -137,9 +147,13 @@ class DashboardScreen extends ConsumerWidget {
 }
 
 class _NoActiveTripDashboard extends ConsumerStatefulWidget {
-  const _NoActiveTripDashboard({required this.userName});
+  const _NoActiveTripDashboard({
+    required this.userName,
+    required this.modeState,
+  });
 
   final String userName;
+  final ModeState modeState;
 
   @override
   ConsumerState<_NoActiveTripDashboard> createState() =>
@@ -166,6 +180,12 @@ class _NoActiveTripDashboardState
 
   @override
   Widget build(BuildContext context) {
+    final offline = widget.modeState.effectiveMode != EffectiveMode.online;
+    final title =
+        offline ? 'No offline trip is active' : 'No online trip is active';
+    final body = offline
+        ? 'Create or join an offline trip to use offline chat, Connect Phones, SOS, map, and walkie-talkie tools.'
+        : 'Create or join an online trip to use cloud chat, online trip members, media, SOS, and map tools.';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -186,7 +206,7 @@ class _NoActiveTripDashboardState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'No Active Trip',
+                title,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
@@ -203,7 +223,7 @@ class _NoActiveTripDashboardState
               ),
               const SizedBox(height: 8),
               Text(
-                'Start or join a trip to enable chat, SOS, map, nearby peers, and walkie-talkie tools.',
+                body,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: Colors.white.withValues(alpha: 0.78),
                     ),
@@ -345,7 +365,16 @@ class _DisabledTripPreviewGrid extends StatelessWidget {
 
 enum _DashboardKind { online, offline }
 
-_DashboardKind _dashboardKind(ModeState state) {
+_DashboardKind _dashboardKind(ModeState state, TripSessionModel? trip) {
+  if (trip != null) {
+    if (trip.mode == 'offline') return _DashboardKind.offline;
+    if (trip.mode == 'hybrid') {
+      return state.effectiveMode == EffectiveMode.online
+          ? _DashboardKind.online
+          : _DashboardKind.offline;
+    }
+    if (trip.mode == 'online') return _DashboardKind.online;
+  }
   return state.effectiveMode == EffectiveMode.online
       ? _DashboardKind.online
       : _DashboardKind.offline;
@@ -371,11 +400,19 @@ class _DashboardHeroCard extends StatelessWidget {
     final activeTrip = trip;
     final channelLabel =
         activeTrip?.channelCode ?? activeChannel?.channelCode ?? 'Not selected';
-    final syncLabel = modeState.effectiveMode == EffectiveMode.online
-        ? modeState.backendReachable
-            ? 'Ready'
-            : 'Waiting to send'
-        : 'Paused';
+    final syncLabel = switch (activeTrip?.mode) {
+      'offline' => 'Saved on this phone',
+      'hybrid' => modeState.effectiveMode == EffectiveMode.online
+          ? modeState.backendReachable
+              ? 'Ready'
+              : 'Waiting to send'
+          : 'Using nearby phones',
+      _ => modeState.effectiveMode == EffectiveMode.online
+          ? modeState.backendReachable
+              ? 'Ready'
+              : 'Waiting to send'
+          : 'Paused',
+    };
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -408,8 +445,9 @@ class _DashboardHeroCard extends StatelessWidget {
                 ),
               ),
               CompactStatusChip(
-                label: _modeChipLabel(modeState),
-                color: _modeColor(modeState),
+                label: _dashboardModeChipLabel(modeState, activeTrip),
+                color: _dashboardModeColor(modeState, activeTrip),
+                icon: _dashboardModeIcon(modeState, activeTrip),
                 backgroundColor: Colors.white.withValues(alpha: 0.12),
                 dense: true,
               ),
@@ -424,21 +462,21 @@ class _DashboardHeroCard extends StatelessWidget {
             _HeroLine(label: 'Mode', value: _tripModeLabel(activeTrip)),
           if (activeTrip != null)
             _HeroLine(
-              label: 'Cloud',
+              label: 'Internet',
               value: activeTrip.cloudGroupId != null
                   ? 'Ready'
                   : activeTrip.mode == 'hybrid'
                       ? 'Pending'
                       : 'Not required',
             ),
-          _HeroLine(label: 'Channel', value: channelLabel),
-          _HeroLine(label: 'Sync', value: syncLabel),
+          _HeroLine(label: 'Trip code', value: channelLabel),
+          _HeroLine(label: 'Updates', value: syncLabel),
           const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: () => context.go('/trip/create'),
+                  onPressed: () => context.go('/trip/setup-wizard'),
                   icon: const Icon(Icons.add_road_rounded),
                   label: const Text('Create Trip'),
                   style: FilledButton.styleFrom(
@@ -450,9 +488,9 @@ class _DashboardHeroCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => context.go('/offline-channel/join'),
+                  onPressed: () => context.go('/trip/setup-wizard?intent=join'),
                   icon: const Icon(Icons.hub_rounded),
-                  label: const Text('Join Channel'),
+                  label: const Text('Join Trip'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.white,
                     side: BorderSide(
@@ -532,9 +570,9 @@ class _StatusChipWrap extends StatelessWidget {
       runSpacing: 8,
       children: [
         CompactStatusChip(
-          label: _modeChipLabel(modeState),
-          color: _modeColor(modeState),
-          icon: modeState.userMode.icon,
+          label: _dashboardModeChipLabel(modeState, trip),
+          color: _dashboardModeColor(modeState, trip),
+          icon: _dashboardModeIcon(modeState, trip),
         ),
         CompactStatusChip(
           label: _identityLabel(authState),
@@ -547,12 +585,8 @@ class _StatusChipWrap extends StatelessWidget {
           icon: trip == null ? Icons.hiking_rounded : Icons.check_circle,
         ),
         CompactStatusChip(
-          label: modeState.effectiveMode == EffectiveMode.online
-              ? 'Sync Ready'
-              : 'Sync Paused',
-          color: modeState.effectiveMode == EffectiveMode.online
-              ? AppColors.success
-              : AppColors.offlinePurple,
+          label: _updatesStatusLabel(modeState, trip),
+          color: _updatesStatusColor(modeState, trip),
           icon: Icons.cloud_sync_rounded,
         ),
       ],
@@ -658,12 +692,6 @@ class _ToolCard extends ConsumerWidget {
                     child: Icon(action.icon, color: color, size: 22),
                   ),
                   const Spacer(),
-                  if (action.badge != null)
-                    CompactStatusChip(
-                      label: action.badge!,
-                      color: color,
-                      dense: true,
-                    ),
                 ],
               ),
               const Spacer(),
@@ -697,9 +725,8 @@ class _ActionSpec {
     this.icon,
     this.color,
     this.featureKey,
-    this.onTap, {
-    this.badge,
-  });
+    this.onTap,
+  );
 
   final String title;
   final String subtitle;
@@ -707,7 +734,6 @@ class _ActionSpec {
   final Color color;
   final String? featureKey;
   final VoidCallback onTap;
-  final String? badge;
 }
 
 List<_ActionSpec> _actionsFor({
@@ -719,23 +745,23 @@ List<_ActionSpec> _actionsFor({
   if (kind == _DashboardKind.online) {
     return [
       _ActionSpec(
-        'Cloud Chat',
-        'Group messages and latest known history',
+        'Online Chat',
+        'Text, photos, and voice notes',
         Icons.forum_rounded,
         AppColors.skyBlue,
         'cloud_chat',
         () => context.go('/chat?tab=cloud'),
       ),
       _ActionSpec(
-        'Groups',
-        'Trip teams and members',
+        'Trip Team',
+        'Members and trip code',
         Icons.groups_rounded,
         AppColors.deepForest,
         'cloud_chat',
         () => context.go('/groups'),
       ),
       _ActionSpec(
-        'Online Map',
+        'Map',
         'Locations and teammates',
         Icons.map_rounded,
         AppColors.success,
@@ -749,15 +775,6 @@ List<_ActionSpec> _actionsFor({
         AppColors.danger,
         'cloud_sos',
         () => context.go('/sos'),
-      ),
-      _ActionSpec(
-        'Bridge',
-        'Hybrid delivery activity',
-        Icons.cable_rounded,
-        AppColors.offlinePurple,
-        'bridge_mode',
-        () => context.go('/bridge'),
-        badge: 'Hybrid',
       ),
     ];
   }
@@ -835,6 +852,57 @@ String _modeChipLabel(ModeState state) {
   return state.userMode.label;
 }
 
+UserMode? _tripModeOverride(TripSessionModel? trip) {
+  if (trip?.mode == 'offline') return UserMode.offline;
+  if (trip?.mode == 'online') return UserMode.online;
+  return null;
+}
+
+String _dashboardModeChipLabel(ModeState state, TripSessionModel? trip) {
+  final tripMode = _tripModeOverride(trip);
+  if (tripMode != null) return tripMode.label;
+
+  if (trip?.mode == 'hybrid') {
+    return switch (state.effectiveMode) {
+      EffectiveMode.online => 'Online Mode',
+      EffectiveMode.offline => 'Offline Mode',
+      EffectiveMode.hybridLimited => 'Reconnecting',
+    };
+  }
+
+  return _modeChipLabel(state);
+}
+
+IconData _dashboardModeIcon(ModeState state, TripSessionModel? trip) {
+  final tripMode = _tripModeOverride(trip);
+  if (tripMode != null) return tripMode.icon;
+
+  if (trip?.mode == 'hybrid') {
+    return switch (state.effectiveMode) {
+      EffectiveMode.online => UserMode.online.icon,
+      EffectiveMode.offline => UserMode.offline.icon,
+      EffectiveMode.hybridLimited => UserMode.auto.icon,
+    };
+  }
+
+  return state.userMode.icon;
+}
+
+Color _dashboardModeColor(ModeState state, TripSessionModel? trip) {
+  final tripMode = _tripModeOverride(trip);
+  if (tripMode != null) return tripMode.color;
+
+  if (trip?.mode == 'hybrid') {
+    return switch (state.effectiveMode) {
+      EffectiveMode.online => AppColors.success,
+      EffectiveMode.offline => AppColors.offlinePurple,
+      EffectiveMode.hybridLimited => AppColors.skyBlue,
+    };
+  }
+
+  return _modeColor(state);
+}
+
 Color _modeColor(ModeState state) {
   if (state.effectiveMode == EffectiveMode.online) return AppColors.success;
   if (state.effectiveMode == EffectiveMode.offline) {
@@ -843,10 +911,29 @@ Color _modeColor(ModeState state) {
   return AppColors.skyBlue;
 }
 
+String _updatesStatusLabel(ModeState state, TripSessionModel? trip) {
+  if (trip?.mode == 'offline') return 'Saved on this phone';
+  if (trip?.mode == 'hybrid') {
+    return state.effectiveMode == EffectiveMode.online
+        ? 'Online updates ready'
+        : 'Nearby updates ready';
+  }
+  return state.effectiveMode == EffectiveMode.online
+      ? 'Online updates ready'
+      : 'Online updates paused';
+}
+
+Color _updatesStatusColor(ModeState state, TripSessionModel? trip) {
+  if (trip?.mode == 'offline') return AppColors.offlinePurple;
+  return state.effectiveMode == EffectiveMode.online
+      ? AppColors.success
+      : AppColors.offlinePurple;
+}
+
 String _identityLabel(AuthAccessState state) {
   return switch (state) {
-    AuthAccessState.authenticatedOnline => 'Cloud Ready',
-    AuthAccessState.authenticatedOfflineCached => 'Cached User',
+    AuthAccessState.authenticatedOnline => 'Internet account ready',
+    AuthAccessState.authenticatedOfflineCached => 'Saved profile',
     AuthAccessState.guestOffline => 'Local Profile',
     AuthAccessState.unauthenticated => 'Identity Needed',
   };
@@ -867,9 +954,9 @@ String _groupName(List<GroupModel> groups) {
 
 String _tripModeLabel(TripSessionModel trip) {
   return switch (trip.mode) {
-    'hybrid' => 'Cloud + Offline Backup',
-    'offline' => 'Offline Only',
-    'online' => 'Cloud Trip',
+    'hybrid' => 'Online trip',
+    'offline' => 'Offline trip',
+    'online' => 'Online trip',
     _ => 'Trip',
   };
 }

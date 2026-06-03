@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -17,6 +18,61 @@ import '../data/models/voice_note_model.dart';
 import '../data/ptt_repository.dart';
 
 enum PttVoiceMode { voiceNote, liveRadio }
+
+enum LiveRadioUiState {
+  idle,
+  requestingLock,
+  lockedByMe,
+  lockedByPeer,
+  streaming,
+  releasing,
+  error,
+}
+
+enum VoiceNotePlaybackStatus { idle, loading, playing, paused, error }
+
+class VoiceNotePlaybackState {
+  const VoiceNotePlaybackState({
+    required this.noteId,
+    required this.status,
+    required this.durationMs,
+    this.progress = 0,
+    this.errorMessage,
+  });
+
+  factory VoiceNotePlaybackState.idle(String noteId, int durationMs) {
+    return VoiceNotePlaybackState(
+      noteId: noteId,
+      status: VoiceNotePlaybackStatus.idle,
+      durationMs: durationMs,
+    );
+  }
+
+  final String noteId;
+  final VoiceNotePlaybackStatus status;
+  final int durationMs;
+  final double progress;
+  final String? errorMessage;
+
+  bool get isLoading => status == VoiceNotePlaybackStatus.loading;
+  bool get isPlaying => status == VoiceNotePlaybackStatus.playing;
+
+  VoiceNotePlaybackState copyWith({
+    VoiceNotePlaybackStatus? status,
+    int? durationMs,
+    double? progress,
+    String? errorMessage,
+    bool clearError = false,
+  }) {
+    return VoiceNotePlaybackState(
+      noteId: noteId,
+      status: status ?? this.status,
+      durationMs: durationMs ?? this.durationMs,
+      progress: progress ?? this.progress,
+      errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
+    );
+  }
+}
 
 bool shouldRefreshPttForOfflineNotice(String? notice) {
   final value = (notice ?? '').toLowerCase();
@@ -72,6 +128,9 @@ class PttState {
     this.isLiveStreaming = false,
     this.isWaitingForFloor = false,
     this.recordingSeconds = 0,
+    this.connectedPeerCount = 0,
+    this.liveRadioState = LiveRadioUiState.idle,
+    this.playbackByNoteId = const {},
     this.errorMessage,
     this.infoMessage,
   });
@@ -85,6 +144,9 @@ class PttState {
   final bool isLiveStreaming;
   final bool isWaitingForFloor;
   final int recordingSeconds;
+  final int connectedPeerCount;
+  final LiveRadioUiState liveRadioState;
+  final Map<String, VoiceNotePlaybackState> playbackByNoteId;
   final String? errorMessage;
   final String? infoMessage;
 
@@ -98,9 +160,13 @@ class PttState {
     bool? isLiveStreaming,
     bool? isWaitingForFloor,
     int? recordingSeconds,
+    int? connectedPeerCount,
+    LiveRadioUiState? liveRadioState,
+    Map<String, VoiceNotePlaybackState>? playbackByNoteId,
     String? errorMessage,
     String? infoMessage,
     bool clearMessages = false,
+    bool clearInfoMessage = false,
   }) {
     return PttState(
       notes: notes ?? this.notes,
@@ -112,8 +178,13 @@ class PttState {
       isLiveStreaming: isLiveStreaming ?? this.isLiveStreaming,
       isWaitingForFloor: isWaitingForFloor ?? this.isWaitingForFloor,
       recordingSeconds: recordingSeconds ?? this.recordingSeconds,
+      connectedPeerCount: connectedPeerCount ?? this.connectedPeerCount,
+      liveRadioState: liveRadioState ?? this.liveRadioState,
+      playbackByNoteId: playbackByNoteId ?? this.playbackByNoteId,
       errorMessage: clearMessages ? null : errorMessage ?? this.errorMessage,
-      infoMessage: clearMessages ? null : infoMessage ?? this.infoMessage,
+      infoMessage: clearMessages || clearInfoMessage
+          ? null
+          : infoMessage ?? this.infoMessage,
     );
   }
 }
@@ -141,6 +212,10 @@ class PttController extends StateNotifier<PttState> {
   AppConnectionMode _mode;
   EffectiveMode _effectiveMode;
   Timer? _recordingTimer;
+  Timer? _playbackTimer;
+  bool _releaseInProgress = false;
+  bool _liveReleaseInProgress = false;
+  bool _liveReleaseRequestedDuringStart = false;
 
   int get _maxRecordingSeconds => args.isOnlineGroup ? 30 : 15;
 
@@ -171,11 +246,22 @@ class PttController extends StateNotifier<PttState> {
         : await _repository.loadLiveRadioSessions(
             offlineChannelId: args.offlineChannel!.channelId,
           );
+    final connectedPeerCount = args.isOnlineGroup
+        ? 0
+        : await _repository.connectedPeerCount(
+            args.offlineChannel,
+          );
+    final clearStaleLiveRadioPeerMessage = connectedPeerCount > 0 &&
+        state.voiceMode == PttVoiceMode.liveRadio &&
+        (state.infoMessage?.toLowerCase().contains('connect a nearby peer') ??
+            false);
     if (!mounted) return;
     state = state.copyWith(
       notes: notes,
       liveSessions: liveSessions,
       isLoading: false,
+      connectedPeerCount: connectedPeerCount,
+      clearInfoMessage: clearStaleLiveRadioPeerMessage,
       floor: _repository.floorController.stateFor(
         contextType: args.contextType,
         contextId: args.contextId,
@@ -256,7 +342,18 @@ class PttController extends StateNotifier<PttState> {
   }
 
   Future<void> releaseToSend() async {
-    if (state.isLiveStreaming) {
+    if (_releaseInProgress) return;
+    if (state.voiceMode == PttVoiceMode.liveRadio) {
+      if (state.isWaitingForFloor ||
+          state.liveRadioState == LiveRadioUiState.requestingLock) {
+        _liveReleaseRequestedDuringStart = true;
+        state = state.copyWith(
+          isWaitingForFloor: false,
+          liveRadioState: LiveRadioUiState.releasing,
+          infoMessage: 'Stopping Live Radio...',
+        );
+        return;
+      }
       await _releaseLiveRadio();
       return;
     }
@@ -264,6 +361,7 @@ class PttController extends StateNotifier<PttState> {
       state = state.copyWith(isWaitingForFloor: false);
       return;
     }
+    _releaseInProgress = true;
     _recordingTimer?.cancel();
     state = state.copyWith(isRecording: false, isWaitingForFloor: false);
     try {
@@ -282,8 +380,9 @@ class PttController extends StateNotifier<PttState> {
         channel: args.offlineChannel,
         deliveryMode: args.isOnlineGroup ? 'online' : 'offline',
       );
+      _logPttDebug('VOICE_NOTE_RECORD_STOPPED');
       if (note == null) {
-        state = state.copyWith(infoMessage: 'Recording was not saved.');
+        state = state.copyWith(infoMessage: 'Hold to record a voice note.');
         return;
       }
       await refresh();
@@ -305,15 +404,93 @@ class PttController extends StateNotifier<PttState> {
     } catch (error) {
       await refresh();
       state = state.copyWith(errorMessage: _friendlyPttError(error));
+    } finally {
+      _releaseInProgress = false;
     }
   }
 
   Future<void> play(VoiceNoteModel note) async {
+    final noteId = note.localVoiceId;
+    final durationMs = note.durationMs ?? 0;
+    _setPlaybackState(
+      noteId,
+      VoiceNotePlaybackState(
+        noteId: noteId,
+        status: VoiceNotePlaybackStatus.loading,
+        durationMs: durationMs,
+      ),
+    );
     try {
+      _logPttDebug('VOICE_NOTE_PLAY_STARTED note=$noteId');
+      _setPlaybackState(
+        noteId,
+        VoiceNotePlaybackState(
+          noteId: noteId,
+          status: VoiceNotePlaybackStatus.playing,
+          durationMs: durationMs,
+        ),
+      );
+      _startPlaybackProgress(noteId, durationMs);
       await _repository.play(note);
+      resetPlayback(noteId);
+      _logPttDebug('VOICE_NOTE_PLAY_STOPPED note=$noteId');
     } catch (error) {
+      _setPlaybackState(
+        noteId,
+        VoiceNotePlaybackState(
+          noteId: noteId,
+          status: VoiceNotePlaybackStatus.error,
+          durationMs: durationMs,
+          errorMessage: _friendlyPttError(error),
+        ),
+      );
       state = state.copyWith(errorMessage: _friendlyPttError(error));
     }
+  }
+
+  void resetPlayback(String noteId) {
+    final current = state.playbackByNoteId[noteId];
+    if (current == null) return;
+    final next = Map<String, VoiceNotePlaybackState>.from(
+      state.playbackByNoteId,
+    );
+    next[noteId] = VoiceNotePlaybackState.idle(noteId, current.durationMs);
+    state = state.copyWith(playbackByNoteId: next);
+  }
+
+  void _setPlaybackState(String noteId, VoiceNotePlaybackState playbackState) {
+    final next = Map<String, VoiceNotePlaybackState>.from(
+      state.playbackByNoteId,
+    );
+    next[noteId] = playbackState;
+    state = state.copyWith(playbackByNoteId: next);
+  }
+
+  void _startPlaybackProgress(String noteId, int durationMs) {
+    _playbackTimer?.cancel();
+    if (durationMs <= 0) return;
+    final startedAt = DateTime.now();
+    _playbackTimer = Timer.periodic(
+      const Duration(milliseconds: 160),
+      (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        final elapsed = DateTime.now().difference(startedAt).inMilliseconds;
+        final progress = (elapsed / durationMs).clamp(0.0, 1.0);
+        final current = state.playbackByNoteId[noteId];
+        if (current == null || !current.isPlaying) {
+          timer.cancel();
+          return;
+        }
+        _setPlaybackState(noteId, current.copyWith(progress: progress));
+        if (progress >= 1.0) {
+          timer.cancel();
+          resetPlayback(noteId);
+        }
+      },
+    );
   }
 
   void onConnectionModeChanged(AppConnectionMode mode) {
@@ -334,7 +511,15 @@ class PttController extends StateNotifier<PttState> {
   }
 
   Future<void> _pressLiveRadio() async {
-    state = state.copyWith(isWaitingForFloor: true, clearMessages: true);
+    _liveReleaseRequestedDuringStart = false;
+    _logPttDebug(
+      'RADIO_LOCK_REQUESTED channel=${args.offlineChannel?.channelCode}',
+    );
+    state = state.copyWith(
+      isWaitingForFloor: true,
+      liveRadioState: LiveRadioUiState.requestingLock,
+      clearMessages: true,
+    );
     final result = await _repository.evaluateLiveRadio(
       effectiveMode: _effectiveMode,
       channel: args.offlineChannel,
@@ -343,6 +528,7 @@ class PttController extends StateNotifier<PttState> {
       state = state.copyWith(
         isWaitingForFloor: false,
         voiceMode: PttVoiceMode.liveRadio,
+        liveRadioState: LiveRadioUiState.idle,
         infoMessage: result.reason,
       );
       return;
@@ -352,9 +538,23 @@ class PttController extends StateNotifier<PttState> {
         channel: args.offlineChannel!,
         user: args.currentUser,
       );
+      _logPttDebug(
+        'RADIO_LOCK_GRANTED channel=${args.offlineChannel?.channelCode}',
+      );
+      _logPttDebug('RADIO_STARTED channel=${args.offlineChannel?.channelCode}');
+      if (_liveReleaseRequestedDuringStart) {
+        state = state.copyWith(
+          isWaitingForFloor: false,
+          isLiveStreaming: true,
+          liveRadioState: LiveRadioUiState.streaming,
+        );
+        await _releaseLiveRadio(status: 'interrupted');
+        return;
+      }
       state = state.copyWith(
         isWaitingForFloor: false,
         isLiveStreaming: true,
+        liveRadioState: LiveRadioUiState.streaming,
         recordingSeconds: 0,
         infoMessage: 'Streaming live...',
         floor: _repository.floorController.stateFor(
@@ -369,18 +569,29 @@ class PttController extends StateNotifier<PttState> {
         state = state.copyWith(recordingSeconds: next);
       });
     } catch (error) {
+      _liveReleaseRequestedDuringStart = false;
       state = state.copyWith(
         isWaitingForFloor: false,
         isLiveStreaming: false,
         voiceMode: PttVoiceMode.liveRadio,
+        liveRadioState: LiveRadioUiState.error,
         errorMessage: _friendlyPttError(error),
       );
     }
   }
 
   Future<void> _releaseLiveRadio({String status = 'ended'}) async {
+    if (_liveReleaseInProgress) return;
+    _liveReleaseInProgress = true;
+    _liveReleaseRequestedDuringStart = false;
     _recordingTimer?.cancel();
-    state = state.copyWith(isLiveStreaming: false, isWaitingForFloor: false);
+    _playbackTimer?.cancel();
+    _logPttDebug('RADIO_STOP_REQUESTED status=$status');
+    state = state.copyWith(
+      isLiveStreaming: false,
+      isWaitingForFloor: false,
+      liveRadioState: LiveRadioUiState.releasing,
+    );
     try {
       if (args.offlineChannel != null) {
         await _repository.endLiveRadio(
@@ -390,15 +601,26 @@ class PttController extends StateNotifier<PttState> {
         );
       }
       await refresh();
-      state = state.copyWith(infoMessage: 'Live Radio ended.');
+      _logPttDebug('RADIO_STOPPED status=$status');
+      _logPttDebug('RADIO_LOCK_RELEASED status=$status');
+      state = state.copyWith(
+        liveRadioState: LiveRadioUiState.idle,
+        infoMessage: 'Live Radio ended.',
+      );
     } catch (error) {
       await refresh();
-      state = state.copyWith(errorMessage: _friendlyPttError(error));
+      state = state.copyWith(
+        liveRadioState: LiveRadioUiState.error,
+        errorMessage: _friendlyPttError(error),
+      );
+    } finally {
+      _liveReleaseInProgress = false;
     }
   }
 
   Future<void> _startRecording() async {
     await _repository.startRecording();
+    _logPttDebug('VOICE_NOTE_RECORD_STARTED');
     state = state.copyWith(
       isRecording: true,
       isWaitingForFloor: false,
@@ -455,6 +677,9 @@ class PttController extends StateNotifier<PttState> {
         contextId: args.contextId,
         currentUserId: args.currentUser.id,
       ),
+      liveRadioState: speakerId == args.currentUser.id
+          ? LiveRadioUiState.lockedByMe
+          : LiveRadioUiState.lockedByPeer,
       infoMessage: '$speakerName is speaking.',
     );
   }
@@ -467,7 +692,10 @@ class PttController extends StateNotifier<PttState> {
       speakerId: data['speakerId']?.toString() ?? '',
       speakerName: data['speakerName']?.toString() ?? 'TrailLink User',
     );
-    state = state.copyWith(infoMessage: 'Channel free.');
+    state = state.copyWith(
+      liveRadioState: LiveRadioUiState.idle,
+      infoMessage: 'Channel free.',
+    );
   }
 
   Future<void> _onVoiceNoteReceived(Map<String, dynamic> data) async {
@@ -485,6 +713,7 @@ class PttController extends StateNotifier<PttState> {
       isLiveStreaming: false,
       isWaitingForFloor: false,
       voiceMode: PttVoiceMode.liveRadio,
+      liveRadioState: LiveRadioUiState.error,
       errorMessage: message,
     );
     await refresh();
@@ -517,6 +746,12 @@ String _friendlyPttError(Object error) {
       .toString()
       .replaceFirst(RegExp(r'^(Bad state|Exception|StateError):\s*'), '')
       .trim();
+}
+
+void _logPttDebug(String message) {
+  if (kDebugMode) {
+    debugPrint('[TrailLink][PTT] $message');
+  }
 }
 
 final pttRepositoryProvider = Provider.autoDispose<PttRepository>((ref) {

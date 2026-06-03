@@ -29,12 +29,37 @@ void main() {
       expect(package, contains('test:phase14j'));
     });
 
+    test('backend channel key hash uses central secret without weak fallback',
+        () {
+      final service = File(
+        'backend/src/modules/tripContext/tripContext.service.js',
+      ).readAsStringSync();
+      final env = File('backend/src/config/env.js').readAsStringSync();
+      final backendReadme = File('backend/README.md').readAsStringSync();
+
+      expect(service, contains("require('../../config/env')"));
+      expect(
+          service, contains("crypto\n  .createHmac('sha256', env.jwtSecret)"));
+      expect(service, isNot(contains("process.env.JWT_SECRET || 'traillink'")));
+      expect(service, isNot(contains("createHash('sha256')")));
+      expect(
+        env,
+        contains(
+          "JWT_SECRET must be set to a long, non-placeholder secret in production.",
+        ),
+      );
+      expect(env, contains('placeholderSecrets'));
+      expect(env, contains('traillink-development-only-secret-change-me'));
+      expect(env, contains("path.resolve(__dirname, '../../.env')"));
+      expect(backendReadme, contains('refuses to start'));
+    });
+
     test('SQLite v22 stores offline backup and cached device roster metadata',
         () {
       final source =
           File('lib/core/database/local_database.dart').readAsStringSync();
 
-      expect(source, contains('version: 22'));
+      expect(source, contains('version: 24'));
       expect(source, contains('_createPhaseTwentyTwoTables'));
       expect(source, contains('offline_backup_ready'));
       expect(source, contains('cloud_prepared_at'));
@@ -111,9 +136,9 @@ void main() {
       expect(wizard, contains('cloudPreparedTripRepositoryProvider'));
       expect(setup, contains('cloudPreparedTripRepositoryProvider'));
       expect(createGroup, contains('createCloudPreparedTrip'));
-      expect(details, contains('Offline backup ready'));
-      expect(details, contains('Members cached'));
-      expect(details, contains('Devices cached'));
+      expect(details, contains('Nearby support ready'));
+      expect(details, contains('Members saved'));
+      expect(details, contains('Phones saved'));
     });
   });
 }

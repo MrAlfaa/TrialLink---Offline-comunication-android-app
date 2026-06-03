@@ -120,8 +120,8 @@ class OfflineMessageBubble extends StatelessWidget {
 
 String _bridgeLabel(OfflineTextMessageModel message) {
   final identity = switch (message.originIdentityType) {
-    'guest' => 'Offline Guest',
-    'authenticated_cached' => 'Cached User',
+    'guest' => 'Offline teammate',
+    'authenticated_cached' => 'Saved profile',
     'verified' => 'Verified',
     _ => null,
   };

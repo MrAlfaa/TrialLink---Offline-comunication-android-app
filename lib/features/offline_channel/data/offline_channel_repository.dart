@@ -205,8 +205,8 @@ class OfflineChannelRepository {
       channelName: 'Offline Channel $normalized',
       description:
           'Channel membership will be checked when nearby phones connect.',
-      createdByUserId: actor.userId,
-      createdByName: actor.displayName,
+      createdByUserId: 'unknown-owner',
+      createdByName: 'Unknown owner',
       isActive: activate,
       createdAt: now,
       updatedAt: now,
@@ -314,6 +314,113 @@ class OfflineChannelRepository {
   }) async {
     await _local.markMemberLeft(channelId: channelId, userId: localUserId);
     await _local.clearActiveChannel(channelId);
+  }
+
+  Future<void> removeMember({
+    required OfflineChannelModel channel,
+    required OfflineChannelMemberModel member,
+    required CurrentUserActor actor,
+    String reason = 'Removed by channel owner.',
+  }) async {
+    _assertOwner(channel: channel, actor: actor);
+    if (member.memberRole == 'owner') {
+      throw StateError('The channel owner cannot be removed.');
+    }
+    if (member.userId == actor.localUserId ||
+        member.userId == actor.backendUserId) {
+      throw StateError('Use Leave Channel to leave your own channel.');
+    }
+    final packet = chat_packet.OfflinePacketModel(
+      packetId: _uuid.v4(),
+      packetType: 'member_removed',
+      channelId: channel.channelId,
+      channelCode: channel.channelCode,
+      senderId: actor.backendUserId ?? actor.localUserId,
+      senderLocalId: actor.localUserId,
+      senderBackendId: actor.backendUserId,
+      senderName: actor.displayName,
+      identityType: actor.identityType,
+      sourcePath: 'offline',
+      targetType: 'member',
+      targetId: member.userId,
+      payload: {
+        'removedUserId': member.userId,
+        'removedDisplayName': member.displayName,
+        'removedByUserId': actor.localUserId,
+        'removedByName': actor.displayName,
+        'reason': reason,
+        'removedAt': DateTime.now().toIso8601String(),
+      },
+      priority: 'high',
+      ttl: 3,
+      hopCount: 0,
+      requiresAck: false,
+      createdAt: DateTime.now(),
+    );
+    await _sendStatusPacket(channel, packet);
+    await _local.markMemberRemoved(
+      channelId: channel.channelId,
+      userId: member.userId,
+    );
+  }
+
+  Future<String> handleMemberRemovedPacket({
+    required chat_packet.OfflinePacketModel packet,
+    required CurrentUserActor currentUser,
+  }) async {
+    final channel = await _local.getChannel(packet.channelId) ??
+        await _local.getChannelByCode(packet.channelCode);
+    if (channel == null || channel.channelCode != packet.channelCode) {
+      return 'Member update ignored.';
+    }
+    final senderIsOwner = packet.senderId == channel.createdByUserId ||
+        packet.senderLocalId == channel.createdByUserId ||
+        await _isMemberOwner(channel.channelId, packet.senderLocalId) ||
+        await _isMemberOwner(channel.channelId, packet.senderId);
+    if (!senderIsOwner) return 'Member update from non-owner ignored.';
+    final removedUserId = packet.payload['removedUserId']?.toString();
+    if (removedUserId == null || removedUserId.isEmpty) {
+      return 'Member update ignored.';
+    }
+    await _local.markMemberRemoved(
+      channelId: channel.channelId,
+      userId: removedUserId,
+    );
+    if (removedUserId == currentUser.localUserId ||
+        removedUserId == currentUser.backendUserId) {
+      await _local.clearActiveChannel(channel.channelId);
+      return 'You were removed from this channel.';
+    }
+    return 'Member removed from this channel.';
+  }
+
+  Future<String> handlePeerHelloPacket({
+    required chat_packet.OfflinePacketModel packet,
+    required OfflineChannelModel activeChannel,
+  }) async {
+    if (packet.channelCode != activeChannel.channelCode) {
+      return 'Phone details ignored for a different channel.';
+    }
+    await syncTripNameFromPeerHello(packet);
+    return 'Phone details updated.';
+  }
+
+  Future<void> syncTripNameFromPeerHello(
+    chat_packet.OfflinePacketModel packet,
+  ) {
+    final tripName = packet.payload['tripName']?.toString() ??
+        packet.payload['trip']?.toString() ??
+        packet.payload['tripNameFromOwner']?.toString();
+    if (tripName == null || tripName.trim().isEmpty) {
+      return Future.value();
+    }
+    return _local.syncTripNameFromPeerHello(
+      channelCode: packet.channelCode,
+      tripName: tripName,
+      ownerLocalId: packet.payload['ownerLocalId']?.toString(),
+      ownerName: packet.payload['ownerName']?.toString(),
+      memberRole: packet.payload['memberRole']?.toString() ?? 'member',
+    );
   }
 
   void _assertOwner({

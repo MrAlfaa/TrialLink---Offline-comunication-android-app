@@ -176,9 +176,17 @@ class NearbyController extends StateNotifier<NearbyState> {
   }
 
   Future<void> refreshPeers() async {
+    await _p2pSessionService.cleanupStalePeers();
     final peers = await _repository.getPeers(args.channel.channelCode);
+    final visiblePeers = await _visibleRemotePeers(peers);
     if (!mounted) return;
-    state = state.copyWith(peers: peers, lastScanAt: DateTime.now());
+    state = state.copyWith(
+      peers: visiblePeers,
+      isAdvertising: _repository.isAdvertising,
+      isDiscovering: _repository.isDiscovering,
+      lastScanAt: DateTime.now(),
+    );
+    if (state.isAdvertising || state.isDiscovering) _startHeartbeat();
   }
 
   Future<bool> requestPermissions() async {
@@ -197,6 +205,8 @@ class NearbyController extends StateNotifier<NearbyState> {
   Future<void> startAdvertising() async {
     if (!await requestPermissions()) return;
     final session = await LocalDatabase.instance.ensureSession();
+    final trip = await _activeTripFromArgs();
+    final isOwner = _isLocalOwner(args.channel.createdByUserId);
     await _run(
       () => _repository.startAdvertising(
         userId: args.user.localUserId,
@@ -204,6 +214,11 @@ class NearbyController extends StateNotifier<NearbyState> {
         activeChannelId: args.channel.channelId,
         activeChannelCode: args.channel.channelCode,
         tripId: args.tripId,
+        tripName: trip.tripName,
+        ownerLocalId:
+            isOwner ? args.user.localUserId : args.channel.createdByUserId,
+        ownerName: isOwner ? args.user.displayName : args.channel.createdByName,
+        memberRole: isOwner ? 'owner' : 'member',
         publicUserId: args.user.publicUserId,
         appDeviceId: session['session_id']?.toString(),
         capabilities: const ['text', 'sos', 'location', 'ptt'],
@@ -219,6 +234,10 @@ class NearbyController extends StateNotifier<NearbyState> {
         state = state.copyWith(isAdvertising: true);
         await refreshPeers();
         _startHeartbeat();
+      },
+      onError: (_) async {
+        state = state.copyWith(isAdvertising: false);
+        await refreshPeers();
       },
     );
   }
@@ -254,6 +273,10 @@ class NearbyController extends StateNotifier<NearbyState> {
         await refreshPeers();
         _startHeartbeat();
       },
+      onError: (_) async {
+        state = state.copyWith(isDiscovering: false);
+        await refreshPeers();
+      },
     );
   }
 
@@ -270,6 +293,12 @@ class NearbyController extends StateNotifier<NearbyState> {
   }
 
   Future<void> connectToPeer(String endpointId) async {
+    final target = _peerByEndpoint(endpointId);
+    if (target?.status == PeerConnectionStatus.connected ||
+        target?.status == PeerConnectionStatus.connecting) {
+      await refreshPeers();
+      return;
+    }
     _setPeerStatus(endpointId, PeerConnectionStatus.connecting);
     await _run(
       () => _repository.connectToPeer(endpointId),
@@ -302,6 +331,7 @@ class NearbyController extends StateNotifier<NearbyState> {
 
   Future<void> _onPeer(NearbyPeerModel peer) async {
     if (peer.activeChannelCode != args.channel.channelCode) return;
+    if (await _isLocalPeer(peer)) return;
     final trip = await _activeTripFromArgs();
     final allowUnknown = await _allowUnknownSameChannel(trip);
     final validation = await _peerValidationService.validatePeer(
@@ -323,14 +353,43 @@ class NearbyController extends StateNotifier<NearbyState> {
       validatedPeer,
       source: validatedPeer.status.name,
     );
-    final peers = [
+    final peers = await _visibleRemotePeers([
       validatedPeer,
-      ...state.peers
-          .where((item) => item.endpointId != validatedPeer.endpointId),
-    ]..sort((a, b) => b.lastSeenAt.compareTo(a.lastSeenAt));
+      ...state.peers.where(
+        (item) =>
+            item.endpointId != validatedPeer.endpointId &&
+            !item.hasSamePhoneIdentity(validatedPeer),
+      ),
+    ]);
     if (!mounted) return;
     state = state.copyWith(peers: peers, lastScanAt: DateTime.now());
     await refreshPeers();
+  }
+
+  Future<List<NearbyPeerModel>> _visibleRemotePeers(
+    Iterable<NearbyPeerModel> peers,
+  ) async {
+    final session = await LocalDatabase.instance.ensureSession();
+    final appDeviceId = session['session_id']?.toString();
+    return NearbyPeerModel.collapseDuplicates(
+      peers.where(
+        (peer) =>
+            peer.activeChannelCode == args.channel.channelCode &&
+            !peer.matchesLocalIdentity(
+              localUserId: args.user.localUserId,
+              actorId: args.user.id,
+              backendUserId: args.user.backendUserId,
+              publicUserId: args.user.publicUserId,
+              appDeviceId: appDeviceId,
+              displayName: args.user.displayName,
+            ),
+      ),
+    );
+  }
+
+  Future<bool> _isLocalPeer(NearbyPeerModel peer) async {
+    final visible = await _visibleRemotePeers([peer]);
+    return visible.isEmpty;
   }
 
   Future<TripSessionModel> _activeTripFromArgs() async {
@@ -343,6 +402,12 @@ class NearbyController extends StateNotifier<NearbyState> {
     );
     if (rows.isEmpty) throw StateError('Active trip not found for Nearby.');
     return TripSessionModel.fromDb(rows.first);
+  }
+
+  bool _isLocalOwner(String createdByUserId) {
+    return createdByUserId == args.user.localUserId ||
+        createdByUserId == args.user.backendUserId ||
+        createdByUserId == args.user.id;
   }
 
   Future<bool> _allowUnknownSameChannel(TripSessionModel trip) async {
@@ -425,7 +490,7 @@ class NearbyController extends StateNotifier<NearbyState> {
       if (peer.endpointId != endpointId) return peer;
       return peer.copyWith(status: status, lastSeenAt: DateTime.now());
     }).toList();
-    state = state.copyWith(peers: peers);
+    state = state.copyWith(peers: NearbyPeerModel.collapseDuplicates(peers));
     if (status == PeerConnectionStatus.disconnected ||
         status == PeerConnectionStatus.lost ||
         status == PeerConnectionStatus.failed) {
@@ -436,6 +501,13 @@ class NearbyController extends StateNotifier<NearbyState> {
         ),
       );
     }
+  }
+
+  NearbyPeerModel? _peerByEndpoint(String endpointId) {
+    for (final peer in state.peers) {
+      if (peer.endpointId == endpointId) return peer;
+    }
+    return null;
   }
 
   Future<void> _run(

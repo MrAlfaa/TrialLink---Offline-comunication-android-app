@@ -24,14 +24,17 @@ class PeerCard extends StatelessWidget {
     final connecting = peer.status == PeerConnectionStatus.connecting;
     final canConnect = peer.status == PeerConnectionStatus.discovered ||
         peer.status == PeerConnectionStatus.disconnected ||
+        peer.status == PeerConnectionStatus.lost ||
         peer.status == PeerConnectionStatus.failed;
     final actionLabel = connected
         ? 'Disconnect'
         : connecting
             ? 'Connecting...'
-            : peer.status == PeerConnectionStatus.lost
-                ? 'Find phone again'
-                : 'Connect';
+            : peer.status == PeerConnectionStatus.lost ||
+                    peer.status == PeerConnectionStatus.disconnected ||
+                    peer.status == PeerConnectionStatus.failed
+                ? 'Reconnect phone'
+                : 'Connect phone';
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),

@@ -44,9 +44,9 @@ class OfflineChannelDetailsScreen extends ConsumerWidget {
             isScrollable: true,
             tabs: [
               Tab(text: 'Overview'),
-              Tab(text: 'Nearby Members'),
-              Tab(text: 'Channel Info'),
-              Tab(text: 'Queue / Packets'),
+              Tab(text: 'Members'),
+              Tab(text: 'Trip Info'),
+              Tab(text: 'Diagnostics'),
             ],
           ),
         ),
@@ -142,7 +142,18 @@ class OfflineChannelDetailsScreen extends ConsumerWidget {
                             ? activeContext?.activeChat?.chatId
                             : null,
                       ),
-                      _MembersTab(members: members),
+                      _MembersTab(
+                        members: members,
+                        currentUserId: actor?.localUserId,
+                        isOwner: actor != null &&
+                            _isChannelOwner(channel.createdByUserId, actor),
+                        onRemoveMember: (member) => _confirmRemoveMember(
+                          context,
+                          ref,
+                          channel,
+                          member,
+                        ),
+                      ),
                       _InfoTab(
                         channelName: channel.channelName,
                         channelCode: channel.channelCode,
@@ -193,7 +204,7 @@ class OfflineChannelDetailsScreen extends ConsumerWidget {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('End Channel'),
+            child: const Text('End Trip'),
           ),
         ],
       ),
@@ -218,9 +229,9 @@ class OfflineChannelDetailsScreen extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Leave offline channel?'),
+        title: const Text('Leave offline trip?'),
         content: const Text(
-          'Your membership will be marked left and the active channel will be cleared. Historical messages stay on this device.',
+          'Your membership will be marked left and the active trip will be cleared. Historical messages stay on this device.',
         ),
         actions: [
           TextButton(
@@ -229,7 +240,7 @@ class OfflineChannelDetailsScreen extends ConsumerWidget {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Leave Channel'),
+            child: const Text('Leave Trip'),
           ),
         ],
       ),
@@ -246,6 +257,40 @@ class OfflineChannelDetailsScreen extends ConsumerWidget {
       ..invalidate(activeTripContextProvider)
       ..invalidate(offlineChannelMembersProvider(channelId));
     if (context.mounted) context.go('/offline-channel');
+  }
+
+  Future<void> _confirmRemoveMember(
+    BuildContext context,
+    WidgetRef ref,
+    OfflineChannelModel channel,
+    OfflineChannelMemberModel member,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove member?'),
+        content: Text(
+          '${member.displayName} will no longer be able to send in this channel after their phone receives the update.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await ref.read(offlineChannelControllerProvider.notifier).removeMember(
+          channel: channel,
+          member: member,
+          user: ref.read(authControllerProvider).user,
+        );
+    ref.invalidate(offlineChannelMembersProvider(channel.channelId));
   }
 
   Future<P2PSessionSwitchAction> _resolveChannelSwitchAction(
@@ -382,7 +427,7 @@ class _OverviewTab extends StatelessWidget {
                 OutlinedButton.icon(
                   onPressed: isEnded ? null : onSetActive,
                   icon: const Icon(Icons.check_circle_rounded),
-                  label: const Text('Set as Active Channel'),
+                  label: const Text('Make Active Trip'),
                 ),
                 if (isOwner) ...[
                   const SizedBox(height: 8),
@@ -398,7 +443,7 @@ class _OverviewTab extends StatelessWidget {
                     ),
                     onPressed: onEnd,
                     icon: const Icon(Icons.archive_rounded),
-                    label: const Text('End Channel'),
+                    label: const Text('End Trip'),
                   ),
                 ],
                 const SizedBox(height: 8),
@@ -453,9 +498,17 @@ bool _isChannelOwner(String createdByUserId, CurrentUserActor actor) {
 }
 
 class _MembersTab extends StatelessWidget {
-  const _MembersTab({required this.members});
+  const _MembersTab({
+    required this.members,
+    required this.currentUserId,
+    required this.isOwner,
+    required this.onRemoveMember,
+  });
 
   final List<OfflineChannelMemberModel> members;
+  final String? currentUserId;
+  final bool isOwner;
+  final ValueChanged<OfflineChannelMemberModel> onRemoveMember;
 
   @override
   Widget build(BuildContext context) {
@@ -469,7 +522,14 @@ class _MembersTab extends StatelessWidget {
       itemBuilder: (context, index) => Card(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: LocalMemberTile(member: members[index]),
+          child: LocalMemberTile(
+            member: members[index],
+            currentUserId: currentUserId,
+            canRemove: isOwner &&
+                members[index].memberRole != 'owner' &&
+                members[index].userId != currentUserId,
+            onRemove: () => onRemoveMember(members[index]),
+          ),
         ),
       ),
     );
@@ -527,7 +587,7 @@ class _InfoTab extends StatelessWidget {
           style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
           onPressed: isBusy ? null : onLeave,
           icon: const Icon(Icons.logout_rounded),
-          label: const Text('Leave Channel'),
+          label: const Text('Leave Trip'),
         ),
       ],
     );
@@ -555,18 +615,18 @@ class _PacketsTab extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Packet Filtering',
+                  'Message Checks',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'TrailLink processes offline packets only when they match this channel code and pass TTL, hop count, and duplicate checks.',
+                  'TrailLink accepts nearby messages only when they match this trip code and pass safety checks.',
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
                   onPressed: mutation.isLoading ? null : onRunPacketFilter,
                   icon: const Icon(Icons.science_rounded),
-                  label: const Text('Run Packet Filter Test'),
+                  label: const Text('Run Message Check'),
                 ),
                 if (mutation.packetFilterResults.isNotEmpty) ...[
                   const SizedBox(height: 12),

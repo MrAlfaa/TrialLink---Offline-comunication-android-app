@@ -7,6 +7,7 @@ const MemberDeviceProfile = require('../../models/memberDeviceProfile.model');
 const Trip = require('../../models/trip.model');
 const TripChannel = require('../../models/tripChannel.model');
 const User = require('../../models/user.model');
+const env = require('../../config/env');
 const { generateUniqueGroupCode } = require('../../utils/generateGroupCode');
 
 const parseDate = (value) => (value ? new Date(value) : undefined);
@@ -118,8 +119,8 @@ const normalizeCapabilities = (capabilities = {}) => ({
 });
 
 const buildChannelKeyHash = ({ groupId, channelCode }) => crypto
-  .createHash('sha256')
-  .update(`${groupId}:${channelCode}:${process.env.JWT_SECRET || 'traillink'}`)
+  .createHmac('sha256', env.jwtSecret)
+  .update(`${groupId}:${channelCode}`)
   .digest('hex');
 
 const preparedPayload = ({ trip, channel, chatRoom, group, roster }) => ({

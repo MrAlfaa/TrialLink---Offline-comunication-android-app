@@ -39,7 +39,7 @@ class LocalDatabase {
 
     _database = await openDatabase(
       dbPath,
-      version: 22,
+      version: 24,
       onCreate: (db, version) async {
         await _createPhaseOneTables(db);
         await _createPhaseTwoTables(db);
@@ -63,6 +63,8 @@ class LocalDatabase {
         await _createPhaseTwentyTables(db);
         await _createPhaseTwentyOneTables(db);
         await _createPhaseTwentyTwoTables(db);
+        await _createPhaseTwentyThreeTables(db);
+        await _createPhaseTwentyFourTables(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -127,6 +129,12 @@ class LocalDatabase {
         }
         if (oldVersion < 22) {
           await _createPhaseTwentyTwoTables(db);
+        }
+        if (oldVersion < 23) {
+          await _createPhaseTwentyThreeTables(db);
+        }
+        if (oldVersion < 24) {
+          await _createPhaseTwentyFourTables(db);
         }
       },
     );
@@ -1511,6 +1519,56 @@ class LocalDatabase {
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_nearby_peers_validation ON nearby_peers(trip_id, verification_status)',
     );
+  }
+
+  Future<void> _createPhaseTwentyThreeTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS network_speed_samples (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sample_id TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        latitude REAL,
+        longitude REAL,
+        accuracy REAL,
+        heading REAL,
+        movement_speed_mps REAL,
+        network_type TEXT NOT NULL,
+        ping_ms INTEGER,
+        download_mbps REAL,
+        upload_mbps REAL,
+        backend_reachable INTEGER NOT NULL DEFAULT 0,
+        error_message TEXT
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_network_speed_samples_created ON network_speed_samples(created_at)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_network_speed_samples_quality ON network_speed_samples(download_mbps, ping_ms)',
+    );
+  }
+
+  Future<void> _createPhaseTwentyFourTables(Database db) async {
+    await db.execute('''
+      DELETE FROM teammate_locations
+      WHERE id NOT IN (
+        SELECT keep_id
+        FROM (
+          SELECT MAX(id) AS keep_id
+          FROM teammate_locations
+          GROUP BY user_id, COALESCE(group_id, ''), COALESCE(offline_channel_id, '')
+        )
+      )
+    ''');
+
+    await db.execute('''
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_teammate_locations_unique_context
+      ON teammate_locations(
+        user_id,
+        COALESCE(group_id, ''),
+        COALESCE(offline_channel_id, '')
+      )
+    ''');
   }
 
   Future<void> _insertDefaultChatIfMissing({

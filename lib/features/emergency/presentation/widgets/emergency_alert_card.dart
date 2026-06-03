@@ -19,6 +19,8 @@ class EmergencyAlertCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasLocation = event.latitude != null && event.longitude != null;
+    final isAcknowledged =
+        event.status == 'acknowledged' || event.ackStatus == 'acknowledged';
     return Card(
       color: AppColors.danger.withValues(alpha: 0.08),
       child: Padding(
@@ -40,7 +42,9 @@ class EmergencyAlertCard extends StatelessWidget {
                         ),
                   ),
                 ),
-                Chip(label: Text(event.status)),
+                Chip(
+                    label:
+                        Text(isAcknowledged ? 'acknowledged' : event.status)),
               ],
             ),
             const SizedBox(height: 8),
@@ -62,9 +66,10 @@ class EmergencyAlertCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: FilledButton.icon(
-                    onPressed: onAcknowledge,
+                    onPressed: isAcknowledged ? null : onAcknowledge,
                     icon: const Icon(Icons.check_circle_rounded),
-                    label: const Text('Acknowledge'),
+                    label:
+                        Text(isAcknowledged ? 'Acknowledged' : 'Acknowledge'),
                   ),
                 ),
                 const SizedBox(width: 8),

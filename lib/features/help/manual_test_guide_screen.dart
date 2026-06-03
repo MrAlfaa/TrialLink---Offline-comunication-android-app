@@ -19,7 +19,7 @@ class ManualTestGuideScreen extends StatelessWidget {
       (
         'Online trip test',
         [
-          'Use Cloud + Offline Backup.',
+          'Use an online trip with offline support.',
           'Confirm cloud chat and offline channel summary appear.',
           'Switch Online Mode and confirm sync starts.',
         ],
@@ -27,7 +27,7 @@ class ManualTestGuideScreen extends StatelessWidget {
       (
         'Offline-only trip test',
         [
-          'Start Offline Only trip.',
+          'Start an offline trip.',
           'Copy the offline channel code.',
           'Confirm Offline Chat, Connect Phones, SOS, Map, and Walkie-talkie are available.',
         ],

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/mode/mode_controller.dart';
+import '../../../core/mode/mode_models.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../p2p_session/data/p2p_session_guard.dart';
 import '../../p2p_session/data/p2p_session_service.dart';
@@ -55,7 +57,14 @@ class _JoinOfflineChannelScreenState
       ref.invalidate(activeUsableOfflineChannelProvider);
       ref.invalidate(activeTripChannelProvider);
       ref.invalidate(activeTripContextProvider);
+      ref.invalidate(modeScopedActiveTripProvider);
       ref.invalidate(activeTripProvider);
+      if (action != P2PSessionSwitchAction.createInactive) {
+        await ref
+            .read(modeControllerProvider.notifier)
+            .setManualCommunicationMode(ManualCommunicationMode.offline);
+      }
+      if (!mounted) return;
       context.go('/offline-channel/${channel.channelId}');
     }
   }
@@ -80,7 +89,7 @@ class _JoinOfflineChannelScreenState
     final state = ref.watch(offlineChannelControllerProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Join Offline Channel')),
+      appBar: AppBar(title: const Text('Join Offline Trip')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),
@@ -92,7 +101,7 @@ class _JoinOfflineChannelScreenState
                 borderRadius: BorderRadius.circular(18),
               ),
               child: const Text(
-                'Channel membership will be checked when nearby phones connect.',
+                'Trip membership will be checked when nearby phones connect.',
               ),
             ),
             const SizedBox(height: 16),
@@ -105,7 +114,7 @@ class _JoinOfflineChannelScreenState
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Enter Channel Code',
+                        'Enter Trip Code',
                         style: Theme.of(context).textTheme.headlineSmall,
                       ),
                       const SizedBox(height: 14),
@@ -113,14 +122,14 @@ class _JoinOfflineChannelScreenState
                         controller: _codeController,
                         textCapitalization: TextCapitalization.characters,
                         decoration: const InputDecoration(
-                          labelText: 'Channel Code',
+                          labelText: 'Trip Code',
                           hintText: 'HIKER-25',
                           prefixIcon: Icon(Icons.tag_rounded),
                         ),
                         validator: (value) {
                           final text = value?.trim() ?? '';
                           if (!RegExp(r'^[A-Za-z0-9-]{4,20}$').hasMatch(text)) {
-                            return 'Invalid channel code. Use letters, numbers, and hyphens only.';
+                            return 'Invalid trip code. Use letters, numbers, and hyphens only.';
                           }
                           return null;
                         },
@@ -137,7 +146,7 @@ class _JoinOfflineChannelScreenState
                       FilledButton.icon(
                         onPressed: state.isLoading ? null : _submit,
                         icon: const Icon(Icons.login_rounded),
-                        label: const Text('Join Channel'),
+                        label: const Text('Join Trip'),
                       ),
                     ],
                   ),

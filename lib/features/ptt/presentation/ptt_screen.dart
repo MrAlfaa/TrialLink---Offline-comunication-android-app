@@ -118,7 +118,7 @@ class _PttBody extends ConsumerWidget {
                   icon: Icons.record_voice_over_rounded,
                   dense: true,
                 ),
-                PeerStatusChip(count: modeState.connectedPeerCount),
+                PeerStatusChip(count: state.connectedPeerCount),
               ],
             ),
             const SizedBox(height: 12),
@@ -210,6 +210,7 @@ class _PttBody extends ConsumerWidget {
               ...state.notes.map(
                 (note) => VoiceNoteBubble(
                   note: note,
+                  playbackState: state.playbackByNoteId[note.localVoiceId],
                   onPlay: () => controller.play(note),
                 ),
               ),

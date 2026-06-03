@@ -53,6 +53,8 @@ class PttRepository {
 
   static const offlineMaxFileBytes = 250 * 1024;
   static const liveAudioMaxPacketBytes = 64 * 1024;
+  static const minVoiceNoteDurationMs = 650;
+  static const minVoiceNoteFileBytes = 128;
 
   final PttApi _api;
   final PttLocalDataSource _local;
@@ -71,6 +73,7 @@ class PttRepository {
   DateTime? _activeLiveStartedAt;
   int _activeLiveChunkCount = 0;
   bool _handlingLiveFailure = false;
+  bool _endingLiveRadio = false;
 
   PttFloorController get floorController => _floorController;
   Stream<String> get liveRadioFailureStream =>
@@ -110,6 +113,11 @@ class PttRepository {
       groupId: groupId,
       offlineChannelId: offlineChannelId,
     );
+  }
+
+  Future<int> connectedPeerCount(OfflineChannelModel? channel) async {
+    if (channel == null) return 0;
+    return (await _connectedPeers(channel.channelCode)).length;
   }
 
   Future<bool> requestOfflineFloor({
@@ -254,35 +262,62 @@ class PttRepository {
     CurrentUserActor? actor,
     String status = 'ended',
   }) async {
+    if (_endingLiveRadio) return;
+    _endingLiveRadio = true;
     final streamId = _activeLiveStreamId;
     final startedAt = _activeLiveStartedAt;
-    await _liveAudio.stopOutgoingStream();
-    if (streamId != null) {
-      final endedAt = DateTime.now();
-      await _sendOfflinePacket(
-        _packetService.createLiveEndPacket(
-          channel: channel,
-          user: user,
-          actor: actor,
-          streamId: streamId,
-          endedAt: endedAt,
-        ),
-        channel.channelCode,
-      );
-      await _local.updateLiveRadioSession(
-        streamId: streamId,
-        endedAt: endedAt,
-        durationMs: startedAt == null
-            ? null
-            : endedAt.difference(startedAt).inMilliseconds,
-        chunkCount: _activeLiveChunkCount,
-        status: status,
-      );
+    Object? firstError;
+    try {
+      try {
+        await _liveAudio.stopOutgoingStream();
+        await _liveAudio.stopIncomingStreams();
+      } catch (error) {
+        firstError ??= error;
+      }
+      if (streamId != null) {
+        final endedAt = DateTime.now();
+        try {
+          await _sendOfflinePacket(
+            _packetService.createLiveEndPacket(
+              channel: channel,
+              user: user,
+              actor: actor,
+              streamId: streamId,
+              endedAt: endedAt,
+            ),
+            channel.channelCode,
+          );
+        } catch (error) {
+          firstError ??= error;
+        }
+        try {
+          await _local.updateLiveRadioSession(
+            streamId: streamId,
+            endedAt: endedAt,
+            durationMs: startedAt == null
+                ? null
+                : endedAt.difference(startedAt).inMilliseconds,
+            chunkCount: _activeLiveChunkCount,
+            status: status,
+          );
+        } catch (error) {
+          firstError ??= error;
+        }
+      }
+      try {
+        await releaseOfflineFloor(channel: channel, user: user, actor: actor);
+      } catch (error) {
+        firstError ??= error;
+      }
+      if (firstError != null) {
+        throw StateError('Live Radio cleanup finished with error: $firstError');
+      }
+    } finally {
+      _activeLiveStreamId = null;
+      _activeLiveStartedAt = null;
+      _activeLiveChunkCount = 0;
+      _endingLiveRadio = false;
     }
-    await releaseOfflineFloor(channel: channel, user: user, actor: actor);
-    _activeLiveStreamId = null;
-    _activeLiveStartedAt = null;
-    _activeLiveChunkCount = 0;
   }
 
   Future<VoiceNoteModel?> stopAndCreateNote({
@@ -293,6 +328,18 @@ class PttRepository {
   }) async {
     final clip = await _audio.stopRecording();
     if (clip == null) return null;
+    if (clip.durationMs < minVoiceNoteDurationMs ||
+        clip.fileSizeBytes < minVoiceNoteFileBytes) {
+      final file = File(clip.filePath);
+      if (file.existsSync()) {
+        try {
+          file.deleteSync();
+        } catch (_) {
+          // The invalid clip is not inserted into SQLite; file cleanup is best-effort.
+        }
+      }
+      return null;
+    }
     final note = VoiceNoteModel(
       localVoiceId: _uuid.v4(),
       groupId: groupId,
@@ -657,7 +704,7 @@ class PttRepository {
     _activeLiveStartedAt = null;
     _activeLiveChunkCount = 0;
     try {
-      await _liveAudio.stopOutgoingStream();
+      await _liveAudio.stopAll();
       await _local.updateLiveRadioSession(
         streamId: streamId,
         endedAt: DateTime.now(),

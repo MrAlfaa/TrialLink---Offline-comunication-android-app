@@ -31,6 +31,24 @@ class OfflineChatRepository {
 
   Stream<String> get packetReceivedStream => _nearby.packetReceivedStream;
 
+  static String? normalizeIncomingChatId({
+    required String? packetChatId,
+    required String? receiverDefaultChatId,
+    required bool packetChatExistsForReceiverChannel,
+  }) {
+    final trimmedPacketChatId = packetChatId?.trim();
+    if (packetChatExistsForReceiverChannel &&
+        trimmedPacketChatId != null &&
+        trimmedPacketChatId.isNotEmpty) {
+      return packetChatId;
+    }
+    final trimmedDefaultChatId = receiverDefaultChatId?.trim();
+    if (trimmedDefaultChatId != null && trimmedDefaultChatId.isNotEmpty) {
+      return receiverDefaultChatId;
+    }
+    return trimmedPacketChatId?.isEmpty ?? true ? null : packetChatId;
+  }
+
   Future<List<OfflineTextMessageModel>> loadMessages(String channelId) {
     return _local.getMessages(channelId);
   }
@@ -258,14 +276,31 @@ class OfflineChatRepository {
       );
     }
 
-    if (!await _local.messageExists(packet.messageId!)) {
+    final packetChatId = packet.chatId;
+    final packetChatExists = packetChatId != null &&
+        packetChatId.trim().isNotEmpty &&
+        await _local.chatExistsForChannel(
+          chatId: packetChatId,
+          channelId: activeChannel.channelId,
+          tripId: activeChannel.tripId ?? packet.tripId,
+        );
+    final receiverChatId = normalizeIncomingChatId(
+      packetChatId: packetChatId,
+      receiverDefaultChatId: await _local.defaultChatIdForChannel(
+        channelId: activeChannel.channelId,
+        tripId: activeChannel.tripId ?? packet.tripId,
+      ),
+      packetChatExistsForReceiverChannel: packetChatExists,
+    );
+    final existingMessage = await _local.getMessage(packet.messageId!);
+    if (existingMessage == null) {
       await _local.upsertMessage(
         OfflineTextMessageModel(
           messageId: packet.messageId!,
           packetId: packet.packetId,
           channelId: activeChannel.channelId,
           channelCode: activeChannel.channelCode,
-          chatId: packet.chatId,
+          chatId: receiverChatId,
           senderId: packet.senderId,
           senderName: packet.senderName,
           content: packet.content!,
@@ -284,6 +319,15 @@ class OfflineChatRepository {
           originIdentityType: packet.identityType,
           bridgedByName: packet.payload['bridgedByName']?.toString(),
         ),
+      );
+    } else if (existingMessage.channelId != activeChannel.channelId ||
+        existingMessage.channelCode != activeChannel.channelCode ||
+        existingMessage.chatId != receiverChatId) {
+      await _local.moveMessageToContext(
+        messageId: packet.messageId!,
+        channelId: activeChannel.channelId,
+        channelCode: activeChannel.channelCode,
+        chatId: receiverChatId,
       );
     }
 

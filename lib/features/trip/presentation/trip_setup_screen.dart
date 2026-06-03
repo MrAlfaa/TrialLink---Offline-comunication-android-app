@@ -6,6 +6,8 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/identity/auth_access_controller.dart';
 import '../../../core/identity/auth_access_state.dart';
 import '../../../core/identity/local_identity_repository.dart';
+import '../../../core/mode/mode_controller.dart';
+import '../../../core/mode/mode_models.dart';
 import '../../../core/setup/setup_progress_service.dart';
 import '../../../shared/widgets/settings_info_box.dart';
 import '../../groups/data/models/group_model.dart';
@@ -82,29 +84,29 @@ class _TripSetupScreenState extends ConsumerState<TripSetupScreen> {
       padding: const EdgeInsets.all(24),
       children: [
         Text(
-          'TrailLink works best when communication tools are connected to a trip session.',
+          'TrailLink works best when messages, map, SOS, and nearby phones belong to one trip.',
           style: Theme.of(context).textTheme.bodyLarge,
         ),
         const SizedBox(height: 18),
         _TripActionCard(
           title: 'Create Offline Trip',
-          subtitle: 'Create a local trip and offline channel code.',
+          subtitle: 'Create a trip that works without internet.',
           icon: Icons.add_road_rounded,
           color: AppColors.offlinePurple,
           onTap: () => _openInlineAction(_TripSetupAction.createOffline),
         ),
         _TripActionCard(
-          title: 'Join Offline Trip Code',
-          subtitle: 'Use a teammate channel code without backend login.',
+          title: 'Join Trip Code',
+          subtitle: 'Use a code from a teammate.',
           icon: Icons.qr_code_2_rounded,
           color: AppColors.signalOrange,
           onTap: () => _openInlineAction(_TripSetupAction.joinOffline),
         ),
         _TripActionCard(
-          title: 'Link Existing Online Group',
+          title: 'Use Existing Online Trip',
           subtitle: access.accessState.canUseBackendFeatures
-              ? 'Choose one of your cloud groups.'
-              : 'Online group linking requires internet and login.',
+              ? 'Choose one of your internet trip teams.'
+              : 'Online trips require internet and sign in.',
           icon: Icons.groups_rounded,
           color: AppColors.skyBlue,
           enabled: access.accessState.canUseBackendFeatures,
@@ -143,26 +145,19 @@ class _TripSetupScreenState extends ConsumerState<TripSetupScreen> {
           const SizedBox(height: 10),
           const SettingsInfoBox(
             message:
-                'Offline trips are stored locally and do not require backend validation.',
+                'Offline trips are saved on this phone and work with nearby teammates.',
           ),
           const SizedBox(height: 18),
           if (joining) ...[
             TextFormField(
               controller: _channelCodeController,
-              decoration: const InputDecoration(labelText: 'Channel code'),
+              decoration: const InputDecoration(
+                labelText: 'Trip code',
+                helperText:
+                    'Trip name from the owner will appear after phones connect.',
+              ),
               textCapitalization: TextCapitalization.characters,
               validator: _validateChannelCode,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _tripNameController,
-              decoration: const InputDecoration(
-                labelText: 'Trip name optional',
-              ),
-              validator: (value) {
-                if ((value ?? '').trim().isEmpty) return null;
-                return _validateTripName(value);
-              },
             ),
           ] else ...[
             TextFormField(
@@ -174,8 +169,8 @@ class _TripSetupScreenState extends ConsumerState<TripSetupScreen> {
             TextFormField(
               controller: _channelCodeController,
               decoration: const InputDecoration(
-                labelText: 'Custom channel code optional',
-                helperText: 'Example: TL-OFF-8K2P',
+                labelText: 'Optional trip code',
+                helperText: 'Leave empty to create one automatically.',
               ),
               textCapitalization: TextCapitalization.characters,
               validator: (value) {
@@ -225,7 +220,6 @@ class _TripSetupScreenState extends ConsumerState<TripSetupScreen> {
         _TripSetupAction.joinOffline => _joinOfflineTrip(
             context: context,
             channelCode: _channelCodeController.text,
-            tripName: _tripNameController.text,
           ),
         null => Future<bool>.value(false),
       };
@@ -259,7 +253,7 @@ class _TripSetupScreenState extends ConsumerState<TripSetupScreen> {
             shrinkWrap: true,
             children: [
               Text(
-                'Select Online Group',
+                'Select Online Trip',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 10),
@@ -315,24 +309,27 @@ class _TripSetupScreenState extends ConsumerState<TripSetupScreen> {
               customChannelCode.trim().isEmpty ? null : customChannelCode,
           activate: action != P2PSessionSwitchAction.createInactive,
         );
+    if (action != P2PSessionSwitchAction.createInactive) {
+      await ref
+          .read(modeControllerProvider.notifier)
+          .setManualCommunicationMode(ManualCommunicationMode.offline);
+    }
     return true;
   }
 
   Future<bool> _joinOfflineTrip({
     required BuildContext context,
     required String channelCode,
-    required String tripName,
   }) async {
     final identity =
         await ref.read(localIdentityRepositoryProvider).getCurrentIdentity();
     if (identity == null) {
       throw StateError('Create an offline identity before joining a trip.');
     }
-    final normalizedName = tripName.trim().isEmpty ? channelCode : tripName;
     if (!context.mounted) return false;
     final action = await _resolveSwitchAction(
       context: context,
-      newTripName: normalizedName,
+      newTripName: channelCode,
     );
     if (action == P2PSessionSwitchAction.cancel) return false;
     if (action == P2PSessionSwitchAction.disconnectAndSwitch) {
@@ -345,13 +342,14 @@ class _TripSetupScreenState extends ConsumerState<TripSetupScreen> {
           .read(tripContextServiceProvider)
           .joinOfflineChannelAsInactiveTrip(
             channelCode,
-            tripName: tripName.trim().isEmpty ? null : tripName,
           );
     } else {
       await ref.read(tripContextServiceProvider).joinOfflineChannelAsActiveTrip(
             channelCode,
-            tripName: tripName.trim().isEmpty ? null : tripName,
           );
+      await ref
+          .read(modeControllerProvider.notifier)
+          .setManualCommunicationMode(ManualCommunicationMode.offline);
     }
     return true;
   }
@@ -387,9 +385,12 @@ class _TripSetupScreenState extends ConsumerState<TripSetupScreen> {
     await ref
         .read(cloudPreparedTripRepositoryProvider)
         .joinCloudPreparedTrip(group.groupCode);
+    await ref
+        .read(modeControllerProvider.notifier)
+        .setManualCommunicationMode(ManualCommunicationMode.online);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Offline backup prepared')),
+        const SnackBar(content: Text('Nearby-phone support ready')),
       );
     }
     return true;
@@ -408,6 +409,7 @@ class _TripSetupScreenState extends ConsumerState<TripSetupScreen> {
     ref.invalidate(activeOfflineChannelProvider);
     ref.invalidate(activeUsableOfflineChannelProvider);
     ref.invalidate(activeTripChannelProvider);
+    ref.invalidate(modeScopedActiveTripProvider);
     ref.invalidate(activeTripProvider);
     if (!context.mounted) return;
     final router = GoRouter.of(context);

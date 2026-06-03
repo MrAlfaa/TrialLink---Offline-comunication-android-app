@@ -40,6 +40,13 @@ class SettingsScreen extends ConsumerWidget {
         color: AppColors.deepForest,
         route: '/settings/features',
       ),
+      _SettingsItem(
+        title: 'Notifications',
+        subtitle: 'Chat, SOS, voice, and internet alerts',
+        icon: Icons.notifications_active_rounded,
+        color: AppColors.signalOrange,
+        route: '/settings/notifications',
+      ),
     ];
     final safetyItems = const [
       _SettingsItem(
@@ -356,13 +363,25 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
       final result = await ref
           .read(cloudSyncControllerProvider.notifier)
           .ensureCloudReadyBeforeOnlineMode();
-      await ref
+      var online = await ref
           .read(authAccessControllerProvider.notifier)
-          .refreshFromIdentity();
+          .refreshFromBackendSession(clearOnFailure: true);
+      if (!online && result.success) {
+        final retry = await ref
+            .read(cloudSyncControllerProvider.notifier)
+            .retryCloudBootstrap();
+        if (retry.success) {
+          online = await ref
+              .read(authAccessControllerProvider.notifier)
+              .refreshFromBackendSession(clearOnFailure: true);
+        }
+      }
       await _load();
       if (!mounted) return;
       final message = result.success
-          ? 'TrailLink ID ready: ${result.publicUserId ?? 'Cloud profile'}'
+          ? online
+              ? 'TrailLink ID ready: ${result.publicUserId ?? 'Cloud profile'}'
+              : 'Cloud profile saved. Sign in again to use online tools.'
           : result.errorMessage ??
               'Cloud profile could not be created. Check backend connection and try again.';
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1145,6 +1164,85 @@ class _DataSyncSettingsScreenState
               message:
                   'TrailLink saves important data locally first. When Online Mode is ready, enabled sync categories run automatically in the background.',
               icon: Icons.info_outline_rounded,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class NotificationSettingsScreen extends ConsumerStatefulWidget {
+  const NotificationSettingsScreen({super.key});
+
+  @override
+  ConsumerState<NotificationSettingsScreen> createState() =>
+      _NotificationSettingsScreenState();
+}
+
+class _NotificationSettingsScreenState
+    extends ConsumerState<NotificationSettingsScreen> {
+  bool _notificationsEnabled = true;
+  bool _messagePreviews = false;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final settings = ref.read(settingsServiceProvider);
+    _notificationsEnabled =
+        await settings.getBool('notifications_enabled', true);
+    _messagePreviews =
+        await settings.getBool('notification_message_previews', false);
+    if (mounted) setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _SettingsScaffold(
+      title: 'Notifications',
+      loading: _loading,
+      children: [
+        SettingsSectionCard(
+          title: 'Local Alerts',
+          icon: Icons.notifications_active_rounded,
+          children: [
+            SettingsToggleTile(
+              title: 'Enable TrailLink notifications',
+              value: _notificationsEnabled,
+              onChanged: (value) async {
+                setState(() => _notificationsEnabled = value);
+                await ref
+                    .read(settingsServiceProvider)
+                    .setBool('notifications_enabled', value);
+              },
+            ),
+            SettingsToggleTile(
+              title: 'Show message previews',
+              value: _messagePreviews,
+              enabled: _notificationsEnabled,
+              onChanged: (value) async {
+                setState(() => _messagePreviews = value);
+                await ref
+                    .read(settingsServiceProvider)
+                    .setBool('notification_message_previews', value);
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        const SettingsSectionCard(
+          title: 'How Alerts Work',
+          icon: Icons.info_outline_rounded,
+          children: [
+            SettingsInfoBox(
+              message:
+                  'TrailLink uses local Android notifications for chat, voice, SOS, and internet availability alerts. Server push notifications can be added later when the app is hosted.',
+              icon: Icons.notifications_rounded,
             ),
           ],
         ),

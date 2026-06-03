@@ -16,13 +16,17 @@ final p2pSessionServiceProvider = Provider<P2PSessionService>((ref) {
   );
 });
 
-final activeP2PSessionProvider = FutureProvider<P2PSessionModel?>((ref) {
-  return ref.read(p2pSessionServiceProvider).getActiveSession();
+final activeP2PSessionProvider = FutureProvider<P2PSessionModel?>((ref) async {
+  final service = ref.read(p2pSessionServiceProvider);
+  await service.cleanupStalePeers();
+  return service.getActiveSession();
 });
 
 final activeP2PPeersProvider =
-    FutureProvider<List<P2PPeerConnectionModel>>((ref) {
-  return ref.read(p2pSessionServiceProvider).getActiveSessionPeers();
+    FutureProvider<List<P2PPeerConnectionModel>>((ref) async {
+  final service = ref.read(p2pSessionServiceProvider);
+  await service.cleanupStalePeers();
+  return service.getActiveSessionPeers();
 });
 
 class P2PSessionService {
@@ -160,8 +164,22 @@ class P2PSessionService {
     );
   }
 
-  Future<void> cleanupStalePeers() {
-    return _repository.cleanupStalePeers();
+  Future<void> cleanupStalePeers() async {
+    await _repository.cleanupStalePeers();
+    final session = await _repository.getActiveSession();
+    if (session == null || session.state != P2PSessionState.connected) {
+      return;
+    }
+    final peers = await _repository.getPeersForSession(session.sessionId);
+    final hasConnectedPeer = peers.any(
+      (peer) => peer.connectionState == P2PPeerConnectionState.connected,
+    );
+    if (hasConnectedPeer) return;
+    await _repository.updateActiveSessionState(
+      P2PSessionState.disconnected,
+      errorMessage: 'stale_peer_cleanup',
+      endSession: true,
+    );
   }
 
   Future<void> _markPeer(

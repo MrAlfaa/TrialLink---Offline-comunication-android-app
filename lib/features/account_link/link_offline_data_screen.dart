@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/identity/auth_access_controller.dart';
 import '../../core/identity/local_identity_repository.dart';
 import '../cloud_identity/data/cloud_sync_controller.dart';
 import '../cloud_identity/presentation/local_identity_card.dart';
@@ -10,6 +11,30 @@ import '../../shared/widgets/settings_info_box.dart';
 
 class LinkOfflineDataScreen extends ConsumerWidget {
   const LinkOfflineDataScreen({super.key});
+
+  Future<void> _createCloudProfile(BuildContext context, WidgetRef ref) async {
+    final result = await ref
+        .read(cloudSyncControllerProvider.notifier)
+        .ensureCloudReadyBeforeOnlineMode();
+    if (!result.success) return;
+
+    var online = await ref
+        .read(authAccessControllerProvider.notifier)
+        .refreshFromBackendSession(clearOnFailure: true);
+    if (!online) {
+      final retry = await ref
+          .read(cloudSyncControllerProvider.notifier)
+          .retryCloudBootstrap();
+      if (!retry.success) return;
+      online = await ref
+          .read(authAccessControllerProvider.notifier)
+          .refreshFromBackendSession(clearOnFailure: true);
+    }
+    if (!context.mounted || !online) return;
+
+    final from = GoRouterState.of(context).uri.queryParameters['from'];
+    context.go(_safeReturnPath(from));
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -34,9 +59,8 @@ class LinkOfflineDataScreen extends ConsumerWidget {
                 if (identity != null)
                   LocalIdentityCard(
                     identity: identity,
-                    onCreateCloudProfile: () => ref
-                        .read(cloudSyncControllerProvider.notifier)
-                        .ensureCloudReadyBeforeOnlineMode(),
+                    onCreateCloudProfile: () =>
+                        _createCloudProfile(context, ref),
                   )
                 else
                   const SettingsInfoBox(
@@ -49,9 +73,7 @@ class LinkOfflineDataScreen extends ConsumerWidget {
                 FilledButton.icon(
                   onPressed: identity == null
                       ? null
-                      : () => ref
-                          .read(cloudSyncControllerProvider.notifier)
-                          .ensureCloudReadyBeforeOnlineMode(),
+                      : () => _createCloudProfile(context, ref),
                   icon: const Icon(Icons.cloud_upload_rounded),
                   label: const Text('Create Cloud Profile Now'),
                 ),
@@ -70,5 +92,17 @@ class LinkOfflineDataScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  String _safeReturnPath(String? from) {
+    if (from == null || from.isEmpty) return '/groups/create';
+    final decoded = Uri.decodeComponent(from);
+    if (!decoded.startsWith('/') || decoded.startsWith('//')) {
+      return '/groups/create';
+    }
+    if (decoded == '/account/link-offline-data') {
+      return '/groups/create';
+    }
+    return decoded;
   }
 }

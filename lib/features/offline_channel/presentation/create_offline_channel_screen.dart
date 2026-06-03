@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/mode/mode_controller.dart';
+import '../../../core/mode/mode_models.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../trip/data/trip_session_service.dart';
 import 'offline_channel_controller.dart';
 
 class CreateOfflineChannelScreen extends ConsumerStatefulWidget {
@@ -41,6 +44,11 @@ class _CreateOfflineChannelScreenState
     if (channel != null && mounted) {
       ref.invalidate(offlineChannelListProvider);
       ref.invalidate(activeOfflineChannelProvider);
+      ref.invalidate(modeScopedActiveTripProvider);
+      await ref
+          .read(modeControllerProvider.notifier)
+          .setManualCommunicationMode(ManualCommunicationMode.offline);
+      if (!mounted) return;
       context.go('/offline-channel/${channel.channelId}');
     }
   }

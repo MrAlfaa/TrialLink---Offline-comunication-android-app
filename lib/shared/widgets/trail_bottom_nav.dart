@@ -67,12 +67,6 @@ class TrailBottomNav extends StatelessWidget {
                     ),
                     const SizedBox(width: 64),
                     _NavItem(
-                      label: 'Connect',
-                      icon: Icons.radar_rounded,
-                      selected: _matches('/nearby-peers'),
-                      onTap: () => context.go('/nearby-peers'),
-                    ),
-                    _NavItem(
                       label: 'Map',
                       icon: Icons.map_rounded,
                       selected: _matches('/map') || location.contains('/map'),
@@ -82,7 +76,6 @@ class TrailBottomNav extends StatelessWidget {
                       label: 'SOS',
                       icon: Icons.sos_rounded,
                       selected: _matches('/sos') || location.contains('/sos'),
-                      color: AppColors.danger,
                       onTap: () => context.go('/sos'),
                     ),
                   ],
@@ -120,14 +113,12 @@ class _NavItem extends StatelessWidget {
     required this.icon,
     required this.selected,
     required this.onTap,
-    this.color = AppColors.signalOrange,
   });
 
   final String label;
   final IconData icon;
   final bool selected;
   final VoidCallback onTap;
-  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -140,7 +131,9 @@ class _NavItem extends StatelessWidget {
           curve: Curves.easeOut,
           padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 4),
           decoration: BoxDecoration(
-            color: selected ? color.withValues(alpha: 0.2) : Colors.transparent,
+            color: selected
+                ? AppColors.signalOrange.withValues(alpha: 0.2)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(20),
           ),
           child: Column(

@@ -15,6 +15,10 @@ final p2pSessionGuardProvider = Provider<P2PSessionGuard>((ref) {
     tripContextService: ref.read(tripContextServiceProvider),
     tripRepository: ref.read(tripSessionRepositoryProvider),
     nearbyRepository: ref.read(nearbyRepositoryProvider),
+    onSessionChanged: () {
+      ref.invalidate(activeP2PSessionProvider);
+      ref.invalidate(activeP2PPeersProvider);
+    },
   );
 });
 
@@ -25,17 +29,20 @@ class P2PSessionGuard {
     required TripContextService tripContextService,
     required TripSessionRepository tripRepository,
     required NearbyRepository nearbyRepository,
+    void Function()? onSessionChanged,
   })  : _sessionService = sessionService,
         _disconnectService = disconnectService,
         _tripContextService = tripContextService,
         _tripRepository = tripRepository,
-        _nearbyRepository = nearbyRepository;
+        _nearbyRepository = nearbyRepository,
+        _onSessionChanged = onSessionChanged;
 
   final P2PSessionService _sessionService;
   final P2PDisconnectService _disconnectService;
   final TripContextService _tripContextService;
   final TripSessionRepository _tripRepository;
   final NearbyRepository _nearbyRepository;
+  final void Function()? _onSessionChanged;
 
   Future<TripSwitchDecision> canSwitchToTrip(
     String newTripId, {
@@ -71,19 +78,27 @@ class P2PSessionGuard {
     String newTripId, {
     String reason = 'switch_trip',
   }) async {
-    await _disconnectService.stopActiveSession(
-      nearbyRepository: _nearbyRepository,
-      reason: reason,
-    );
-    await _tripContextService.activateTrip(newTripId);
+    try {
+      await _disconnectService.stopActiveSession(
+        nearbyRepository: _nearbyRepository,
+        reason: reason,
+      );
+      await _tripContextService.activateTrip(newTripId);
+    } finally {
+      _onSessionChanged?.call();
+    }
   }
 
   Future<void> disconnectActiveSession({
     String reason = 'manual_disconnect',
-  }) {
-    return _disconnectService.stopActiveSession(
-      nearbyRepository: _nearbyRepository,
-      reason: reason,
-    );
+  }) async {
+    try {
+      await _disconnectService.stopActiveSession(
+        nearbyRepository: _nearbyRepository,
+        reason: reason,
+      );
+    } finally {
+      _onSessionChanged?.call();
+    }
   }
 }

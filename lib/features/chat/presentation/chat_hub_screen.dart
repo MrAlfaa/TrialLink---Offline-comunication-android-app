@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/mode/mode_controller.dart';
+import '../../../core/mode/mode_models.dart';
 import '../../../shared/widgets/compact_status_chip.dart';
 import '../../groups/data/models/group_model.dart';
 import '../../groups/presentation/group_controller.dart';
@@ -25,16 +27,12 @@ class ChatHubScreen extends ConsumerStatefulWidget {
 }
 
 class _ChatHubScreenState extends ConsumerState<ChatHubScreen> {
-  late int _selectedIndex;
+  late _MessageTab _selectedTab;
 
   @override
   void initState() {
     super.initState();
-    _selectedIndex = switch (widget.initialTab) {
-      'offline' => 1,
-      'recent' => 2,
-      _ => 0,
-    };
+    _selectedTab = _tabFromInitial(widget.initialTab);
   }
 
   @override
@@ -42,16 +40,16 @@ class _ChatHubScreenState extends ConsumerState<ChatHubScreen> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialTab == widget.initialTab) return;
     setState(() {
-      _selectedIndex = switch (widget.initialTab) {
-        'offline' => 1,
-        'recent' => 2,
-        _ => 0,
-      };
+      _selectedTab = _tabFromInitial(widget.initialTab);
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final modeState = ref.watch(modeStateProvider);
+    final scope = _scopeForMode(modeState.effectiveMode);
+    final tabs = _tabsForScope(scope);
+    final selectedTab = tabs.contains(_selectedTab) ? _selectedTab : tabs.first;
     final activeTrip = ref.watch(activeTripProvider);
     final activeContext = ref.watch(activeTripContextProvider).asData?.value;
     final trip = activeTrip.asData?.value;
@@ -85,6 +83,7 @@ class _ChatHubScreenState extends ConsumerState<ChatHubScreen> {
                           trip: trip,
                           channel: channel,
                           chatId: activeContext?.activeChat?.chatId,
+                          scope: scope,
                         ),
                         const SizedBox(height: 18),
                         Text(
@@ -99,7 +98,7 @@ class _ChatHubScreenState extends ConsumerState<ChatHubScreen> {
                           children: [
                             Expanded(
                               child: FilledButton.icon(
-                                onPressed: _openCreate,
+                                onPressed: () => _openCreateForScope(scope),
                                 icon: const Icon(Icons.add_rounded),
                                 label: const Text('Create'),
                               ),
@@ -107,7 +106,7 @@ class _ChatHubScreenState extends ConsumerState<ChatHubScreen> {
                             const SizedBox(width: 10),
                             Expanded(
                               child: OutlinedButton.icon(
-                                onPressed: _openJoin,
+                                onPressed: () => _openJoinForScope(scope),
                                 icon: const Icon(Icons.login_rounded),
                                 label: const Text('Join'),
                               ),
@@ -116,18 +115,20 @@ class _ChatHubScreenState extends ConsumerState<ChatHubScreen> {
                         ),
                         const SizedBox(height: 18),
                         _SegmentedTabs(
-                          selectedIndex: _selectedIndex,
-                          onChanged: (index) =>
-                              setState(() => _selectedIndex = index),
+                          tabs: tabs,
+                          selectedTab: selectedTab,
+                          onChanged: (tab) =>
+                              setState(() => _selectedTab = tab),
                         ),
                         const SizedBox(height: 16),
                         AnimatedSwitcher(
                           duration: const Duration(milliseconds: 180),
-                          child: switch (_selectedIndex) {
-                            0 => _CloudGroupsPane(groupsState: groupsState),
-                            1 => _OfflineChannelsPane(
+                          child: switch (selectedTab) {
+                            _MessageTab.cloud =>
+                              _CloudGroupsPane(groupsState: groupsState),
+                            _MessageTab.offline => _OfflineChannelsPane(
                                 channelsValue: channelsValue),
-                            _ => const _RecentPane(),
+                            _MessageTab.recent => const _RecentPane(),
                           },
                         ),
                       ],
@@ -137,16 +138,16 @@ class _ChatHubScreenState extends ConsumerState<ChatHubScreen> {
     );
   }
 
-  void _openCreate() {
-    if (_selectedIndex == 1) {
+  void _openCreateForScope(_MessageScope scope) {
+    if (scope == _MessageScope.offline) {
       context.go('/offline-channel/create');
       return;
     }
     context.go('/groups/create');
   }
 
-  void _openJoin() {
-    if (_selectedIndex == 1) {
+  void _openJoinForScope(_MessageScope scope) {
+    if (scope == _MessageScope.offline) {
       context.go('/offline-channel/join');
       return;
     }
@@ -206,15 +207,49 @@ class _NoTripMessagesPrompt extends StatelessWidget {
   }
 }
 
+enum _MessageScope { online, offline }
+
+enum _MessageTab { cloud, offline, recent }
+
+_MessageScope _scopeForMode(EffectiveMode mode) {
+  return mode == EffectiveMode.online
+      ? _MessageScope.online
+      : _MessageScope.offline;
+}
+
+_MessageTab _tabFromInitial(String? value) {
+  return switch (value) {
+    'offline' => _MessageTab.offline,
+    'recent' => _MessageTab.recent,
+    _ => _MessageTab.cloud,
+  };
+}
+
+List<_MessageTab> _tabsForScope(_MessageScope scope) {
+  return scope == _MessageScope.online
+      ? const [_MessageTab.cloud, _MessageTab.recent]
+      : const [_MessageTab.offline, _MessageTab.recent];
+}
+
+String _labelForTab(_MessageTab tab) {
+  return switch (tab) {
+    _MessageTab.cloud => 'Online Groups',
+    _MessageTab.offline => 'Offline Chats',
+    _MessageTab.recent => 'Recent',
+  };
+}
+
 class _TripMessageShortcuts extends StatelessWidget {
   const _TripMessageShortcuts({
     required this.trip,
     required this.channel,
+    required this.scope,
     this.chatId,
   });
 
   final TripSessionModel trip;
   final OfflineChannelModel? channel;
+  final _MessageScope scope;
   final String? chatId;
 
   @override
@@ -230,11 +265,7 @@ class _TripMessageShortcuts extends StatelessWidget {
             Text(trip.tripName, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             Text(
-              hybrid
-                  ? 'Cloud + Offline Backup'
-                  : trip.isOffline
-                      ? 'Offline Only'
-                      : 'Cloud Trip',
+              trip.isOffline ? 'Offline trip' : 'Online trip',
             ),
             if (trip.channelCode?.isNotEmpty == true) ...[
               const SizedBox(height: 4),
@@ -247,19 +278,21 @@ class _TripMessageShortcuts extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 14),
-            if (trip.cloudGroupId != null)
+            if (scope == _MessageScope.online && trip.cloudGroupId != null)
               _ShortcutButton(
-                label: 'Cloud Chat',
+                label: 'Online Chat',
                 icon: Icons.cloud_done_rounded,
                 onTap: () => context.go('/groups/${trip.cloudGroupId}/chat'),
               ),
-            if (offline && channel != null)
+            if (scope == _MessageScope.offline && offline && channel != null)
               _ShortcutButton(
-                label: 'Offline Channel Chat',
+                label: 'Nearby Chat',
                 icon: Icons.hub_rounded,
                 onTap: () => _openOfflineChat(context, trip, channel!, chatId),
               ),
-            if (trip.isOffline && channel != null) ...[
+            if (scope == _MessageScope.offline &&
+                trip.isOffline &&
+                channel != null) ...[
               _ShortcutButton(
                 label: 'Connect Phones',
                 icon: Icons.people_alt_rounded,
@@ -330,16 +363,17 @@ class _ShortcutButton extends StatelessWidget {
 
 class _SegmentedTabs extends StatelessWidget {
   const _SegmentedTabs({
-    required this.selectedIndex,
+    required this.tabs,
+    required this.selectedTab,
     required this.onChanged,
   });
 
-  final int selectedIndex;
-  final ValueChanged<int> onChanged;
+  final List<_MessageTab> tabs;
+  final _MessageTab selectedTab;
+  final ValueChanged<_MessageTab> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    const labels = ['Cloud Groups', 'Offline Channels', 'Recent'];
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -349,12 +383,12 @@ class _SegmentedTabs extends StatelessWidget {
       ),
       child: Row(
         children: [
-          for (var i = 0; i < labels.length; i++)
+          for (final tab in tabs)
             Expanded(
               child: _SegmentButton(
-                label: labels[i],
-                selected: selectedIndex == i,
-                onTap: () => onChanged(i),
+                label: _labelForTab(tab),
+                selected: selectedTab == tab,
+                onTap: () => onChanged(tab),
               ),
             ),
         ],

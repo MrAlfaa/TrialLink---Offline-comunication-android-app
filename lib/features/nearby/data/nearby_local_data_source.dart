@@ -18,17 +18,48 @@ class NearbyLocalDataSource {
       whereArgs: [channelCode],
       orderBy: 'last_seen_at DESC',
     );
-    return rows.map(NearbyPeerModel.fromDb).toList();
+    return NearbyPeerModel.collapseDuplicates(
+      rows.map(NearbyPeerModel.fromDb),
+    );
   }
 
   Future<void> upsertPeer(NearbyPeerModel peer) async {
     final db = await _database.database;
-    await db.insert(
-      'nearby_peers',
-      peer.toDbMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.transaction((txn) async {
+      await txn.insert(
+        'nearby_peers',
+        peer.toDbMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      await _collapseDuplicateRows(txn, peer.activeChannelCode);
+    });
     await addEvent(peer.endpointId, peer.status.name);
+  }
+
+  Future<void> _collapseDuplicateRows(
+    Transaction txn,
+    String channelCode,
+  ) async {
+    final rows = await txn.query(
+      'nearby_peers',
+      where: 'active_channel_code = ? AND is_same_channel = 1',
+      whereArgs: [channelCode],
+      orderBy: 'last_seen_at DESC',
+    );
+    if (rows.length < 2) return;
+    final collapsed = NearbyPeerModel.collapseDuplicates(
+      rows.map(NearbyPeerModel.fromDb),
+    );
+    final keepEndpoints = collapsed.map((peer) => peer.endpointId).toSet();
+    for (final row in rows) {
+      final endpointId = row['endpoint_id']?.toString();
+      if (endpointId == null || keepEndpoints.contains(endpointId)) continue;
+      await txn.delete(
+        'nearby_peers',
+        where: 'endpoint_id = ?',
+        whereArgs: [endpointId],
+      );
+    }
   }
 
   Future<void> updateStatus(

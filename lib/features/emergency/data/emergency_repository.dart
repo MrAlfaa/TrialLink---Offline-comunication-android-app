@@ -330,6 +330,17 @@ class EmergencyRepository {
     await _local.upsertEvent(event);
   }
 
+  Future<void> acknowledgeOffline({
+    required String localEventId,
+  }) {
+    return _local.markEvent(
+      localEventId: localEventId,
+      status: 'acknowledged',
+      ackStatus: 'acknowledged',
+      syncState: 'local_only',
+    );
+  }
+
   Future<void> _markProcessed(OfflinePacketModel packet, String action) {
     return _local.markProcessed(
       packetId: packet.packetId,

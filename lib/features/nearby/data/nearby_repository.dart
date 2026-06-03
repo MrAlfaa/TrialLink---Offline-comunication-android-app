@@ -33,13 +33,38 @@ class NearbyRepository {
       _transport.peerConnectionChangedStream;
   Stream<String> get peerLostStream => _transport.peerLostStream;
   Stream<String> get packetReceivedStream => _transport.packetReceivedStream;
+  bool get isAdvertising => _transport.isAdvertising;
+  bool get isDiscovering => _transport.isDiscovering;
 
   Future<NearbyPermissionState> requestPermissions() {
     return _permissions.checkAndRequest();
   }
 
-  Future<List<NearbyPeerModel>> getPeers(String channelCode) {
-    return _local.getPeersForChannel(channelCode);
+  Future<List<NearbyPeerModel>> getPeers(String channelCode) async {
+    final stored = await _local.getPeersForChannel(channelCode);
+    final live = _transport.connectedPeersForChannel(channelCode);
+    final liveEndpointIds = live.map((peer) => peer.endpointId).toSet();
+    for (final peer in live) {
+      await _local.upsertPeer(peer);
+    }
+    final reconciled = <NearbyPeerModel>[
+      for (final peer in stored)
+        if (peer.status == PeerConnectionStatus.connected &&
+            !liveEndpointIds.contains(peer.endpointId))
+          peer.copyWith(
+            status: PeerConnectionStatus.lost,
+            lastSeenAt: DateTime.now(),
+          )
+        else
+          peer,
+      ...live,
+    ];
+    for (final peer in reconciled) {
+      if (peer.status == PeerConnectionStatus.lost) {
+        await markLost(peer.endpointId);
+      }
+    }
+    return NearbyPeerModel.collapseDuplicates(reconciled);
   }
 
   Future<List<NearbyPeerModel>> connectedPeers(String channelCode) async {
@@ -52,10 +77,10 @@ class NearbyRepository {
     for (final peer in stored) {
       if (peer.status == PeerConnectionStatus.connected &&
           !liveEndpointIds.contains(peer.endpointId)) {
-        unawaited(markLost(peer.endpointId));
+        await markLost(peer.endpointId);
       }
     }
-    return live.toList()..sort((a, b) => b.lastSeenAt.compareTo(a.lastSeenAt));
+    return NearbyPeerModel.collapseDuplicates(live);
   }
 
   Future<void> savePeer(NearbyPeerModel peer) => _local.upsertPeer(peer);
@@ -70,6 +95,10 @@ class NearbyRepository {
     required String activeChannelId,
     required String activeChannelCode,
     String? tripId,
+    String? tripName,
+    String? ownerLocalId,
+    String? ownerName,
+    String memberRole = 'member',
     String? publicUserId,
     String? appDeviceId,
     List<String> capabilities = const ['text'],
@@ -80,6 +109,10 @@ class NearbyRepository {
       activeChannelId: activeChannelId,
       activeChannelCode: activeChannelCode,
       tripId: tripId,
+      tripName: tripName,
+      ownerLocalId: ownerLocalId,
+      ownerName: ownerName,
+      memberRole: memberRole,
       publicUserId: publicUserId,
       appDeviceId: appDeviceId,
       capabilities: capabilities,

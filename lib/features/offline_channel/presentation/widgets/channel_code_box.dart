@@ -32,11 +32,11 @@ class ChannelCodeBox extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: 'Copy channel code',
+            tooltip: 'Copy trip code',
             onPressed: () {
               Clipboard.setData(ClipboardData(text: channelCode));
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Channel code copied.')),
+                const SnackBar(content: Text('Trip code copied.')),
               );
             },
             icon: const Icon(Icons.copy_rounded),

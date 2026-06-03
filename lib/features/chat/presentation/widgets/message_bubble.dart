@@ -305,8 +305,8 @@ String? _absoluteMediaUrl(String? value) {
 
 String _bridgeLabel(ChatMessageModel message) {
   final identity = switch (message.originIdentityType) {
-    'guest' => 'Offline Guest',
-    'authenticated_cached' => 'Cached User',
+    'guest' => 'Offline teammate',
+    'authenticated_cached' => 'Saved profile',
     'verified' => 'Verified',
     _ => null,
   };

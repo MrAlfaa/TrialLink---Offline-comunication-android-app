@@ -181,12 +181,19 @@ class EmergencyController extends StateNotifier<EmergencyState> {
   }
 
   Future<void> acknowledge(EmergencyEventModel event) async {
-    if (event.groupId == null || event.serverEventId == null) return;
-    await _repository.acknowledgeOnline(
-      groupId: event.groupId!,
-      eventId: event.serverEventId!,
-    );
+    if (event.groupId != null && event.serverEventId != null) {
+      await _repository.acknowledgeOnline(
+        groupId: event.groupId!,
+        eventId: event.serverEventId!,
+      );
+    } else {
+      await _repository.acknowledgeOffline(
+        localEventId: event.localEventId,
+      );
+    }
     await refresh();
+    if (!mounted) return;
+    state = state.copyWith(infoMessage: 'Emergency alert acknowledged.');
   }
 
   Future<void> _onOnlineEmergency(Map<String, dynamic> data) async {

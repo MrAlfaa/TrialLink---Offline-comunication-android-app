@@ -11,7 +11,7 @@ void main() {
       final source =
           File('lib/core/database/local_database.dart').readAsStringSync();
 
-      expect(source, contains('version: 22'));
+      expect(source, contains('version: 24'));
       expect(source, contains('_createPhaseTwentyOneTables'));
       expect(source,
           contains('CREATE TABLE IF NOT EXISTS p2p_connection_sessions'));
@@ -75,11 +75,18 @@ void main() {
       expect(service, contains('Future<void> markPeerConnected'));
       expect(service, contains('Future<void> updateHeartbeat'));
       expect(service, contains('Future<void> cleanupStalePeers'));
+      expect(service, contains('stale_peer_cleanup'));
+      expect(service, contains('P2PPeerConnectionState.connected'));
       expect(guard, contains('Future<TripSwitchDecision> canSwitchToTrip'));
       expect(guard, contains('Future<bool> requireDisconnectBeforeSwitch'));
       expect(guard, contains('Future<void> disconnectAndSwitchTrip'));
+      expect(guard, contains('onSessionChanged'));
+      expect(guard, contains('activeP2PSessionProvider'));
+      expect(guard, contains('activeP2PPeersProvider'));
       expect(disconnect, contains("packetType: 'trip_session_leave'"));
       expect(disconnect, contains('nearbyRepository.disconnectAllPeers'));
+      expect(disconnect, contains('finally'));
+      expect(disconnect, contains('disconnectAllPeers(reason: reason)'));
     });
 
     test('Nearby lifecycle starts sessions and records peer state', () {

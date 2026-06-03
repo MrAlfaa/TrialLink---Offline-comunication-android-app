@@ -111,109 +111,140 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               ),
             ),
             SafeArea(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(28),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: 176,
-                        height: 176,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            AnimatedBuilder(
-                              animation: _pulse,
-                              builder: (context, _) => CustomPaint(
-                                painter: _SignalPulsePainter(
-                                  progress: _pulse.value,
-                                  color: AppColors.signalOrange,
-                                ),
-                                size: const Size.square(176),
-                              ),
-                            ),
-                            ScaleTransition(
-                              scale: _scale,
-                              child: Container(
-                                width: 122,
-                                height: 122,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.94),
-                                  borderRadius: BorderRadius.circular(34),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.82),
-                                    width: 1.5,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.signalOrange
-                                          .withValues(alpha: 0.28),
-                                      blurRadius: 34,
-                                      spreadRadius: 4,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxHeight < 560;
+                  final logoCanvas = compact ? 124.0 : 176.0;
+                  final logoBox = compact ? 86.0 : 122.0;
+                  final logoRadius = compact ? 24.0 : 34.0;
+                  final titleStyle =
+                      Theme.of(context).textTheme.headlineLarge?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0,
+                          );
+                  final taglineStyle =
+                      Theme.of(context).textTheme.titleLarge?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.9),
+                            fontWeight: FontWeight.w700,
+                          );
+
+                  return SingleChildScrollView(
+                    physics: const ClampingScrollPhysics(),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 28,
+                            vertical: compact ? 14 : 28,
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: logoCanvas,
+                                height: logoCanvas,
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    AnimatedBuilder(
+                                      animation: _pulse,
+                                      builder: (context, _) => CustomPaint(
+                                        painter: _SignalPulsePainter(
+                                          progress: _pulse.value,
+                                          color: AppColors.signalOrange,
+                                        ),
+                                        size: Size.square(logoCanvas),
+                                      ),
+                                    ),
+                                    ScaleTransition(
+                                      scale: _scale,
+                                      child: Container(
+                                        width: logoBox,
+                                        height: logoBox,
+                                        decoration: BoxDecoration(
+                                          color: Colors.white
+                                              .withValues(alpha: 0.94),
+                                          borderRadius:
+                                              BorderRadius.circular(logoRadius),
+                                          border: Border.all(
+                                            color: Colors.white
+                                                .withValues(alpha: 0.82),
+                                            width: 1.5,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: AppColors.signalOrange
+                                                  .withValues(alpha: 0.28),
+                                              blurRadius: compact ? 22 : 34,
+                                              spreadRadius: compact ? 2 : 4,
+                                            ),
+                                          ],
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            compact ? 20 : 30,
+                                          ),
+                                          child: Image.asset(
+                                            'assets/branding/traillink_logo.png',
+                                            fit: BoxFit.cover,
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(30),
-                                  child: Image.asset(
-                                    'assets/branding/traillink_logo.png',
-                                    fit: BoxFit.cover,
+                              ),
+                              SizedBox(height: compact ? 12 : 26),
+                              Text(
+                                AppStrings.appName,
+                                textAlign: TextAlign.center,
+                                style: titleStyle,
+                              ),
+                              SizedBox(height: compact ? 4 : 8),
+                              Text(
+                                'Stay connected. Even off-grid.',
+                                textAlign: TextAlign.center,
+                                style: taglineStyle,
+                              ),
+                              SizedBox(height: compact ? 10 : 18),
+                              DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color:
+                                        Colors.white.withValues(alpha: 0.18),
+                                  ),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 8,
+                                  ),
+                                  child: Text(
+                                    'Tap to skip',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: Colors.white
+                                              .withValues(alpha: 0.82),
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 26),
-                      Text(
-                        AppStrings.appName,
-                        style:
-                            Theme.of(context).textTheme.headlineLarge?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0,
-                                ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Stay connected. Even off-grid.',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.9),
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                      const SizedBox(height: 18),
-                      DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.18),
-                          ),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
-                          ),
-                          child: Text(
-                            'Tap to skip',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(
-                                  color: Colors.white.withValues(alpha: 0.82),
-                                  fontWeight: FontWeight.w700,
-                                ),
+                            ],
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                ),
+                    ),
+                  );
+                },
               ),
             ),
           ],

@@ -135,6 +135,9 @@ void main() {
       final emergency =
           File('lib/features/emergency/data/emergency_repository.dart')
               .readAsStringSync();
+      final controller =
+          File('lib/features/emergency/presentation/emergency_controller.dart')
+              .readAsStringSync();
       final location =
           File('lib/features/location/data/location_repository.dart')
               .readAsStringSync();
@@ -144,8 +147,20 @@ void main() {
       expect(router, contains("case 'location':"));
       expect(router, contains('lastEmergencyAlert'));
       expect(emergency, contains('sendOfflineSosAck'));
+      expect(emergency, contains('Future<void> acknowledgeOffline'));
+      expect(controller, contains('acknowledgeOffline'));
       expect(location, contains('TeammateLocationModel'));
       expect(location, contains('offlineChannelId: activeChannel.channelId'));
+    });
+
+    test('offline teammate locations are unique per same sender and channel',
+        () {
+      final database =
+          File('lib/core/database/local_database.dart').readAsStringSync();
+
+      expect(database, contains('idx_teammate_locations_unique_context'));
+      expect(database, contains("COALESCE(group_id, '')"));
+      expect(database, contains("COALESCE(offline_channel_id, '')"));
     });
   });
 }

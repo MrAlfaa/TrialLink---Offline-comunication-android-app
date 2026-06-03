@@ -142,7 +142,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     ];
     final mapNotice = modeState.effectiveMode == EffectiveMode.online
         ? 'Map tiles are loaded online. Saved teammate locations remain available offline.'
-        : 'Offline mode: map tiles may be unavailable, but saved coordinates and teammate cards remain available.';
+        : 'Saved coordinates stay available here. New map details may need internet.';
 
     return Scaffold(
       appBar: AppBar(
@@ -165,7 +165,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 children: [
                   ModeStatusChip(state: modeState),
                   CompactStatusChip(
-                    label: own == null ? 'GPS pending' : 'GPS ready',
+                    label: own == null ? 'Getting GPS' : 'GPS ready',
                     color: own == null ? AppColors.warning : AppColors.success,
                     icon: own == null
                         ? Icons.gps_not_fixed_rounded

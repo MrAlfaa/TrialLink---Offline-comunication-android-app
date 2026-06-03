@@ -71,6 +71,7 @@ class NearbyPeersScreen extends ConsumerWidget {
                           _P2PStatusChip(
                             session: session,
                             currentTripId: tripContext.trip.tripId,
+                            connectedCount: state.connectedCount,
                           ),
                           SyncStatusChip(
                             status: state.connectedCount > 0
@@ -269,27 +270,31 @@ class _P2PStatusChip extends StatelessWidget {
   const _P2PStatusChip({
     required this.session,
     required this.currentTripId,
+    required this.connectedCount,
   });
 
   final P2PSessionModel? session;
   final String currentTripId;
+  final int connectedCount;
 
   @override
   Widget build(BuildContext context) {
-    final connectedElsewhere =
-        session != null && session!.tripId != currentTripId;
-    final label = connectedElsewhere
-        ? 'Connected to another trip'
-        : switch (session?.state) {
-            P2PSessionState.connected => 'Connected to current trip',
-            P2PSessionState.connecting => 'Connecting',
-            P2PSessionState.advertising => 'Visible',
-            P2PSessionState.discovering => 'Finding phones',
-            _ => 'Disconnected',
-          };
+    final connectedElsewhere = connectedCount == 0 &&
+        session != null &&
+        session!.tripId != currentTripId;
+    final label = connectedCount > 0
+        ? 'Connected to current trip'
+        : connectedElsewhere
+            ? 'Connected to another trip'
+            : switch (session?.state) {
+                P2PSessionState.connecting => 'Connecting',
+                P2PSessionState.advertising => 'Visible',
+                P2PSessionState.discovering => 'Finding phones',
+                _ => 'Disconnected',
+              };
     final color = connectedElsewhere
         ? AppColors.warning
-        : session?.state == P2PSessionState.connected
+        : connectedCount > 0 || session?.state == P2PSessionState.connected
             ? AppColors.success
             : AppColors.muted;
     return CompactStatusChip(

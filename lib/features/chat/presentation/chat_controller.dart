@@ -7,7 +7,6 @@ import '../../../core/connectivity/send_path_decider.dart';
 import '../../../core/mode/mode_controller.dart';
 import '../../../core/mode/mode_models.dart';
 import '../../auth/data/models/user_model.dart';
-import '../../bridge/data/bridge_engine.dart';
 import '../../groups/data/group_repository.dart';
 import '../../groups/presentation/group_controller.dart';
 import '../data/chat_repository.dart';
@@ -90,11 +89,9 @@ class ChatController extends StateNotifier<ChatState> {
     required ChatRepository repository,
     required SocketService socketService,
     required ModeState initialModeState,
-    required BridgeEngine bridgeEngine,
     required GroupRepository groupRepository,
   })  : _repository = repository,
         _socketService = socketService,
-        _bridgeEngine = bridgeEngine,
         _groupRepository = groupRepository,
         _modeState = initialModeState,
         super(
@@ -109,7 +106,6 @@ class ChatController extends StateNotifier<ChatState> {
   final ChatSessionArgs args;
   final ChatRepository _repository;
   final SocketService _socketService;
-  final BridgeEngine _bridgeEngine;
   final GroupRepository _groupRepository;
   ModeState _modeState;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
@@ -150,7 +146,6 @@ class ChatController extends StateNotifier<ChatState> {
       content: trimmed,
     );
     _replaceMessages([...state.messages, message]);
-    unawaited(_bridgeEngine.bridgeOnlineMessageToOffline(message));
 
     final sendPath = SendPathDecider.decideForMode(
       modeState: _modeState,
@@ -346,7 +341,6 @@ class ChatController extends StateNotifier<ChatState> {
     );
     if (message.groupId != args.groupId) return;
     await _repository.upsertIncoming(message);
-    unawaited(_bridgeEngine.bridgeOnlineMessageToOffline(message));
     final messages = await _repository.loadLocalMessages(args.groupId);
     if (!mounted) return;
     _replaceMessages(messages);
@@ -440,7 +434,6 @@ final chatControllerProvider = StateNotifierProvider.autoDispose
       repository: ref.read(chatRepositoryProvider),
       socketService: ref.read(socketServiceProvider),
       initialModeState: ref.read(modeControllerProvider),
-      bridgeEngine: ref.read(bridgeEngineProvider),
       groupRepository: ref.read(groupRepositoryProvider),
     );
     ref.listen(modeControllerProvider, (_, next) {

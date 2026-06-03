@@ -86,8 +86,7 @@ void main() {
       final source = File(
         'lib/features/offline_chat/data/offline_chat_repository.dart',
       ).readAsStringSync();
-      final start =
-          source.indexOf('if (!await _local.messageExists(packet.messageId!))');
+      final start = source.indexOf('final packetChatId');
       final incomingInsertBlock = source.substring(
         start,
         source.indexOf('await _local.markProcessed(packet: packet', start),
@@ -101,6 +100,9 @@ void main() {
       );
       expect(
           incomingInsertBlock, isNot(contains('channelId: packet.channelId')));
+      expect(incomingInsertBlock, contains('normalizeIncomingChatId'));
+      expect(incomingInsertBlock, contains('receiverChatId'));
+      expect(incomingInsertBlock, contains('moveMessageToContext'));
     });
 
     test('Live Radio remains experimental and falls back safely', () {

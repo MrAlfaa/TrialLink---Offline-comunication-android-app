@@ -7,6 +7,8 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/identity/auth_access_controller.dart';
 import '../../../core/identity/auth_access_state.dart';
 import '../../../core/identity/local_identity_repository.dart';
+import '../../../core/mode/mode_controller.dart';
+import '../../../core/mode/mode_models.dart';
 import '../../../core/settings/settings_service.dart';
 import '../../../shared/widgets/compact_status_chip.dart';
 import '../../nearby/data/nearby_permission_service.dart';
@@ -36,8 +38,8 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
   static const _steps = [
     'Choose Trip Type',
     'Create or Join',
-    'Communication Preparation',
-    'Readiness Check',
+    'Prepare Your Phone',
+    'Final Check',
     'Start Trip',
   ];
 
@@ -106,7 +108,7 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
           state: _ReadinessState.ready,
         ),
         _ReadinessItem(
-          label: 'Cloud group ready / not required',
+          label: 'Internet account ready',
           state: _type == TripWizardType.offlineOnly
               ? _ReadinessState.optional
               : cloudReady
@@ -114,11 +116,11 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
                   : _ReadinessState.optional,
         ),
         const _ReadinessItem(
-          label: 'Offline channel ready',
+          label: 'Nearby phone channel ready',
           state: _ReadinessState.ready,
         ),
         _ReadinessItem(
-          label: 'Nearby permission',
+          label: 'Nearby phone permission',
           state: _nearbyReadinessState(nearbyPermission),
           actionLabel: nearbyPermission.granted ? null : 'Grant Permission',
           onFix: nearbyPermission.granted ? null : _grantNearbyPermission,
@@ -143,7 +145,7 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
           onFix: sosEnabled ? null : () => context.go('/settings/safety'),
         ),
         _ReadinessItem(
-          label: 'Voice-note PTT enabled',
+          label: 'Talk feature enabled',
           state:
               voiceEnabled ? _ReadinessState.ready : _ReadinessState.optional,
           actionLabel: 'Open Voice',
@@ -294,6 +296,9 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
                 tripName: _tripNameController.text,
                 description: _descriptionController.text,
               );
+          await ref
+              .read(modeControllerProvider.notifier)
+              .setManualCommunicationMode(ManualCommunicationMode.online);
         case TripWizardType.offlineOnly:
           await repo.createOfflineOnlyTrip(
             tripName: _tripNameController.text,
@@ -301,6 +306,11 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
             customChannelCode: _blankToNull(_customCodeController.text),
             activate: switchAction != P2PSessionSwitchAction.createInactive,
           );
+          if (switchAction != P2PSessionSwitchAction.createInactive) {
+            await ref
+                .read(modeControllerProvider.notifier)
+                .setManualCommunicationMode(ManualCommunicationMode.offline);
+          }
         case TripWizardType.joinExisting:
           if (switchAction == P2PSessionSwitchAction.createInactive) {
             await ref
@@ -310,6 +320,9 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
             await ref
                 .read(tripContextServiceProvider)
                 .joinOfflineChannelAsActiveTrip(_joinCodeController.text);
+            await ref
+                .read(modeControllerProvider.notifier)
+                .setManualCommunicationMode(ManualCommunicationMode.offline);
           }
       }
       final settings = ref.read(settingsServiceProvider);
@@ -322,6 +335,7 @@ class _TripSetupWizardScreenState extends ConsumerState<TripSetupWizardScreen> {
       ref.invalidate(activeOfflineChannelProvider);
       ref.invalidate(activeUsableOfflineChannelProvider);
       ref.invalidate(activeTripChannelProvider);
+      ref.invalidate(modeScopedActiveTripProvider);
       ref.invalidate(activeTripProvider);
       if (!mounted) return;
       context.go('/home');
@@ -405,16 +419,16 @@ class _ChooseTypeStep extends StatelessWidget {
       key: const ValueKey('choose-type'),
       children: [
         _TripTypeCard(
-          title: 'Cloud + Offline Backup',
+          title: 'Online trip',
           badge: 'Recommended',
           message:
-              'Use cloud chat when online and offline channel when signal is lost.',
+              'Use internet chat now and keep nearby-phone support ready for remote areas.',
           icon: Icons.cloud_sync_rounded,
           selected: selected == TripWizardType.cloudBackup,
           onTap: () => onChanged(TripWizardType.cloudBackup),
         ),
         _TripTypeCard(
-          title: 'Offline Only',
+          title: 'Offline trip',
           message:
               'For remote areas without internet. Uses nearby phones and channel code.',
           icon: Icons.hub_rounded,
@@ -422,8 +436,8 @@ class _ChooseTypeStep extends StatelessWidget {
           onTap: () => onChanged(TripWizardType.offlineOnly),
         ),
         _TripTypeCard(
-          title: 'Join Existing Trip',
-          message: 'Join using a teammate’s trip or channel code.',
+          title: 'Join trip',
+          message: 'Join using a trip code from a teammate.',
           icon: Icons.login_rounded,
           selected: selected == TripWizardType.joinExisting,
           onTap: () => onChanged(TripWizardType.joinExisting),
@@ -463,7 +477,7 @@ class _CreateJoinStep extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                joining ? 'Join Existing Trip' : 'Create Trip',
+                joining ? 'Join Trip' : 'Create Trip',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 14),
@@ -472,7 +486,9 @@ class _CreateJoinStep extends StatelessWidget {
                   controller: joinCodeController,
                   textCapitalization: TextCapitalization.characters,
                   decoration: const InputDecoration(
-                    labelText: 'Trip code / channel code',
+                    labelText: 'Trip code',
+                    helperText:
+                        'Trip name from the owner will appear after phones connect.',
                     prefixIcon: Icon(Icons.tag_rounded),
                   ),
                   validator: _validateCode,
@@ -500,8 +516,8 @@ class _CreateJoinStep extends StatelessWidget {
                   controller: customCodeController,
                   textCapitalization: TextCapitalization.characters,
                   decoration: const InputDecoration(
-                    labelText: 'Optional offline channel code',
-                    helperText: 'Example: TL-OFF-8K2P',
+                    labelText: 'Optional trip code',
+                    helperText: 'Leave empty to create one automatically.',
                     prefixIcon: Icon(Icons.hub_rounded),
                   ),
                   validator: (value) {
@@ -528,7 +544,7 @@ class _PreparationStep extends StatelessWidget {
   Widget build(BuildContext context) {
     if (loading) return const Center(child: CircularProgressIndicator());
     return _ReadinessList(
-      title: 'Communication Preparation',
+      title: 'Prepare Your Phone',
       message: 'Fix missing items now, or continue with optional items later.',
       items: items,
     );
@@ -544,10 +560,10 @@ class _ReadinessStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _ReadinessList(
-      title: 'Readiness Check',
+      title: 'Final Check',
       message: type == TripWizardType.offlineOnly
           ? 'Offline readiness is enough to start this trip.'
-          : 'Cloud can sync later. Offline backup keeps the trip usable now.',
+          : 'Internet setup can finish later. Nearby-phone support keeps the trip usable in remote areas.',
       items: items,
     );
   }
@@ -585,7 +601,7 @@ class _StartTripStep extends StatelessWidget {
                 label: 'Trip', value: name.isEmpty ? 'New Trip' : name),
             _SummaryLine(label: 'Mode', value: _typeLabel(type)),
             _SummaryLine(
-              label: 'Offline channel',
+              label: 'Trip code',
               value: offlineCode.trim().isEmpty
                   ? 'Will be generated'
                   : offlineCode.trim().toUpperCase(),
@@ -599,8 +615,8 @@ class _StartTripStep extends StatelessWidget {
               value: _stateText(readiness, 'Location permission'),
             ),
             _SummaryLine(
-              label: 'PTT',
-              value: _stateText(readiness, 'Voice-note PTT enabled'),
+              label: 'Talk',
+              value: _stateText(readiness, 'Talk feature enabled'),
             ),
           ],
         ),
@@ -837,9 +853,9 @@ String? _blankToNull(String value) {
 
 String _typeLabel(TripWizardType type) {
   return switch (type) {
-    TripWizardType.cloudBackup => 'Cloud + Offline Backup',
-    TripWizardType.offlineOnly => 'Offline Only',
-    TripWizardType.joinExisting => 'Join Existing Trip',
+    TripWizardType.cloudBackup => 'Online trip',
+    TripWizardType.offlineOnly => 'Offline trip',
+    TripWizardType.joinExisting => 'Join trip',
   };
 }
 

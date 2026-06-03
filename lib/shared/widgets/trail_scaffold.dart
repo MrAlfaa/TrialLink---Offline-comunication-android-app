@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/mode/mode_controller.dart';
 import '../../core/mode/mode_models.dart';
+import '../../features/trip/data/trip_session_model.dart';
+import '../../features/trip/data/trip_session_service.dart';
 import 'mode_bottom_sheet.dart';
 import 'trail_bottom_nav.dart';
 
@@ -27,7 +29,8 @@ class _TrailScaffoldState extends ConsumerState<TrailScaffold> {
   Widget build(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
     final modeState = ref.watch(modeControllerProvider);
-    final mode = modeState.userMode;
+    final activeTrip = ref.watch(activeTripProvider).asData?.value;
+    final mode = _bottomNavMode(modeState, activeTrip);
     final modeButtonEnabled =
         modeState.modeControlType == ModeControlType.manual;
 
@@ -104,4 +107,15 @@ class _TrailScaffoldState extends ConsumerState<TrailScaffold> {
       const SnackBar(content: Text('Press back again to exit')),
     );
   }
+}
+
+UserMode _bottomNavMode(ModeState modeState, TripSessionModel? activeTrip) {
+  if (activeTrip?.mode == 'offline') return UserMode.offline;
+  if (activeTrip?.mode == 'online') return UserMode.online;
+  if (activeTrip?.mode == 'hybrid') {
+    return modeState.effectiveMode == EffectiveMode.online
+        ? UserMode.online
+        : UserMode.offline;
+  }
+  return modeState.userMode;
 }

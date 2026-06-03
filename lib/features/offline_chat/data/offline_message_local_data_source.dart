@@ -56,6 +56,71 @@ class OfflineMessageLocalDataSource {
     return rows.isEmpty ? null : OfflineTextMessageModel.fromDb(rows.first);
   }
 
+  Future<bool> chatExistsForChannel({
+    required String chatId,
+    required String channelId,
+    String? tripId,
+  }) async {
+    if (chatId.trim().isEmpty) return false;
+    final db = await _database.database;
+    final where = StringBuffer('chat_id = ? AND channel_id = ?');
+    final args = <Object?>[chatId, channelId];
+    if ((tripId ?? '').trim().isNotEmpty) {
+      where.write(' AND trip_id = ?');
+      args.add(tripId);
+    }
+    final rows = await db.query(
+      'chat_rooms',
+      columns: ['chat_id'],
+      where: where.toString(),
+      whereArgs: args,
+      limit: 1,
+    );
+    return rows.isNotEmpty;
+  }
+
+  Future<String?> defaultChatIdForChannel({
+    required String channelId,
+    String? tripId,
+  }) async {
+    final db = await _database.database;
+    final where = StringBuffer('channel_id = ? AND chat_status IN (?, ?, ?)');
+    final args = <Object?>[channelId, 'active', 'inactive', 'read_only'];
+    if ((tripId ?? '').trim().isNotEmpty) {
+      where.write(' AND trip_id = ?');
+      args.add(tripId);
+    }
+    final rows = await db.query(
+      'chat_rooms',
+      columns: ['chat_id'],
+      where: where.toString(),
+      whereArgs: args,
+      orderBy: 'is_active DESC, is_default DESC, created_at ASC',
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.first['chat_id']?.toString();
+  }
+
+  Future<int> moveMessageToContext({
+    required String messageId,
+    required String channelId,
+    required String channelCode,
+    String? chatId,
+  }) async {
+    final db = await _database.database;
+    return db.update(
+      'offline_messages',
+      {
+        'channel_id': channelId,
+        'channel_code': channelCode,
+        'chat_id': chatId,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'message_id = ?',
+      whereArgs: [messageId],
+    );
+  }
+
   Future<int> updateMessageStatus({
     required String messageId,
     required String deliveryStatus,

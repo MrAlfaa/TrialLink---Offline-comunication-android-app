@@ -11,7 +11,7 @@ extension PeerConnectionStatusX on PeerConnectionStatus {
   String get label {
     switch (this) {
       case PeerConnectionStatus.discovered:
-        return 'Discovered';
+        return 'Available';
       case PeerConnectionStatus.connecting:
         return 'Connecting';
       case PeerConnectionStatus.connected:
@@ -19,7 +19,7 @@ extension PeerConnectionStatusX on PeerConnectionStatus {
       case PeerConnectionStatus.disconnected:
         return 'Disconnected';
       case PeerConnectionStatus.lost:
-        return 'Lost';
+        return 'Recently seen';
       case PeerConnectionStatus.failed:
         return 'Failed';
     }

@@ -20,6 +20,7 @@ import '../../features/ptt/data/ptt_repository.dart';
 import '../identity/auth_access_controller.dart';
 import '../identity/current_user_actor.dart';
 import '../identity/local_identity_repository.dart';
+import '../notifications/trail_notification_service.dart';
 
 class OfflinePacketRouterState {
   const OfflinePacketRouterState({
@@ -205,8 +206,14 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
           currentUser: actor,
         ))
             .message;
-        if (packet.packetType == 'text') {
-          await _tryBridge(packet);
+        if (packet.packetType == 'text' && !_isFromActor(packet, actor)) {
+          unawaited(
+            TrailNotificationService.instance.notifyOfflineChatMessage(
+              channelId: activeChannel.channelId,
+              senderName: packet.senderName,
+              preview: packet.content,
+            ),
+          );
         }
         break;
       case 'sos':
@@ -235,6 +242,14 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
                 )
               : null,
         );
+        if (packet.packetType == 'sos' && !_isFromActor(packet, actor)) {
+          unawaited(
+            TrailNotificationService.instance.notifyOfflineSos(
+              channelId: activeChannel.channelId,
+              senderName: packet.senderName,
+            ),
+          );
+        }
         return;
       case 'location':
         result = await _locationRepository.handleIncomingPacket(
@@ -260,6 +275,18 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
         );
         result = 'Heartbeat received.';
         break;
+      case 'peer_hello':
+        result = await _channelRepository.handlePeerHelloPacket(
+          packet: packet,
+          activeChannel: activeChannel,
+        );
+        break;
+      case 'member_removed':
+        result = await _channelRepository.handleMemberRemovedPacket(
+          packet: packet,
+          currentUser: actor,
+        );
+        break;
       case 'channel_status_update':
         result = await _channelRepository.handleChannelStatusPacket(
           packet: packet,
@@ -281,8 +308,13 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
           activeChannel: activeChannel,
           currentUser: actor.toUserModel(),
         );
-        if (!packet.packetType.startsWith('live_audio_')) {
-          await _tryBridge(packet);
+        if (packet.packetType == 'voice_note' && !_isFromActor(packet, actor)) {
+          unawaited(
+            TrailNotificationService.instance.notifyOfflineVoiceNote(
+              channelId: activeChannel.channelId,
+              senderName: packet.senderName,
+            ),
+          );
         }
         break;
       default:
@@ -320,6 +352,13 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
       packet: packet,
       reason: 'trip_session_leave',
     );
+  }
+
+  bool _isFromActor(OfflinePacketModel packet, CurrentUserActor actor) {
+    return packet.senderId == actor.id ||
+        packet.senderId == actor.localUserId ||
+        packet.senderLocalId == actor.localUserId ||
+        packet.senderBackendId == actor.backendUserId;
   }
 
   @override

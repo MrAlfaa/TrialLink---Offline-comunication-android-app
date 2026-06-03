@@ -9,6 +9,10 @@ class NearbyAdvertisementPayload {
     required this.deviceName,
     required this.timestamp,
     this.tripId,
+    this.tripName,
+    this.ownerLocalId,
+    this.ownerName,
+    this.memberRole = 'member',
     this.publicUserId,
     this.appDeviceId,
     this.capabilities = const ['text'],
@@ -25,6 +29,10 @@ class NearbyAdvertisementPayload {
   final String deviceName;
   final DateTime timestamp;
   final String? tripId;
+  final String? tripName;
+  final String? ownerLocalId;
+  final String? ownerName;
+  final String memberRole;
   final String? publicUserId;
   final String? appDeviceId;
   final List<String> capabilities;
@@ -87,6 +95,10 @@ class NearbyAdvertisementPayload {
       publicUserId: data['senderPublicUserId']?.toString() ??
           data['publicUserId']?.toString(),
       appDeviceId: data['appDeviceId']?.toString(),
+      tripName: data['tripName']?.toString(),
+      ownerLocalId: data['ownerLocalId']?.toString(),
+      ownerName: data['ownerName']?.toString(),
+      memberRole: data['memberRole']?.toString() ?? 'member',
       capabilities: (data['capabilities'] as List<dynamic>?)
               ?.map((item) => item.toString())
               .toList(growable: false) ??
@@ -127,6 +139,10 @@ class NearbyAdvertisementPayload {
       'appId': appId,
       'protocolVersion': protocolVersion,
       'tripId': tripId,
+      'tripName': tripName,
+      'ownerLocalId': ownerLocalId,
+      'ownerName': ownerName,
+      'memberRole': memberRole,
       'channelId': activeChannelId,
       'channelCode': activeChannelCode,
       'senderLocalId': userId,

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/identity/auth_access_controller.dart';
+import '../../../core/notifications/trail_notification_service.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../trip_context/data/trip_context_service.dart';
 import '../data/socket_service.dart';
@@ -31,7 +33,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _scrollController = ScrollController();
 
   @override
+  void initState() {
+    super.initState();
+    TrailNotificationService.instance.setActiveOnlineChat(widget.groupId);
+  }
+
+  @override
   void dispose() {
+    TrailNotificationService.instance.clearActiveOnlineChat(widget.groupId);
     _scrollController.dispose();
     super.dispose();
   }
@@ -49,7 +58,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(authControllerProvider).user;
+    final authState = ref.watch(authControllerProvider);
+    final authAccess = ref.watch(authAccessControllerProvider);
+    final user = authState.user ?? authAccess.user;
     if (user == null) {
       return const Scaffold(
         body: Center(
@@ -150,7 +161,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   state.socketStatus == ChatSocketStatus.connected,
               offlineHint: state.isOnline
                   ? null
-                  : 'Media is online-only. Offline mode supports text and voice-note PTT.',
+                  : 'Photos need internet. Offline trips support text and voice notes.',
             ),
           ],
         ),
@@ -176,24 +187,36 @@ List<ChatHeaderChip> _chatHeaderChips(ChatState state) {
             message.syncState == 'needs_sync',
       )
       .length;
+  final connectionChip = !state.isOnline
+      ? const ChatHeaderChip(
+          label: 'Saved locally',
+          color: AppColors.offlinePurple,
+          icon: Icons.save_rounded,
+        )
+      : switch (state.socketStatus) {
+          ChatSocketStatus.connected => const ChatHeaderChip(
+              label: 'Online',
+              color: AppColors.success,
+              icon: Icons.cloud_done_rounded,
+            ),
+          ChatSocketStatus.connecting ||
+          ChatSocketStatus.reconnecting =>
+            const ChatHeaderChip(
+              label: 'Connecting',
+              color: AppColors.warning,
+              icon: Icons.sync_rounded,
+            ),
+          _ => const ChatHeaderChip(
+              label: 'Online paused',
+              color: AppColors.warning,
+              icon: Icons.cloud_off_rounded,
+            ),
+        };
   return [
-    if (!state.isOnline ||
-        state.socketStatus == ChatSocketStatus.disconnected ||
-        state.socketStatus == ChatSocketStatus.error)
-      const ChatHeaderChip(
-        label: 'Saved locally',
-        color: AppColors.offlinePurple,
-        icon: Icons.save_rounded,
-      )
-    else
-      const ChatHeaderChip(
-        label: 'Online',
-        color: AppColors.success,
-        icon: Icons.cloud_done_rounded,
-      ),
+    connectionChip,
     if (pending > 0)
       ChatHeaderChip(
-        label: '$pending pending',
+        label: '$pending waiting',
         color: AppColors.warning,
         icon: Icons.schedule_rounded,
       ),

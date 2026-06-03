@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/auth/data/models/user_model.dart';
+import '../../features/auth/presentation/auth_controller.dart';
 import '../../features/chat/data/message_sync_service.dart';
 import '../../features/chat/data/socket_service.dart';
 import '../../features/cloud_identity/data/cloud_identity_status_model.dart';
@@ -15,6 +16,7 @@ import '../connectivity/connection_mode_provider.dart';
 import '../identity/auth_access_controller.dart';
 import '../identity/auth_access_state.dart';
 import '../identity/local_identity_repository.dart';
+import '../notifications/trail_notification_service.dart';
 import '../settings/app_settings_defaults.dart';
 import '../settings/settings_service.dart';
 import 'mode_models.dart';
@@ -43,6 +45,17 @@ final modeControllerProvider =
                 identity: identity,
                 user: user,
               );
+          ref.read(authControllerProvider.notifier).setAuthenticatedUser(user);
+        }
+      } else if (result.success) {
+        final restored = await ref
+            .read(authAccessControllerProvider.notifier)
+            .refreshFromBackendSession();
+        final access = ref.read(authAccessControllerProvider);
+        if (restored && access.user != null) {
+          ref
+              .read(authControllerProvider.notifier)
+              .setAuthenticatedUser(access.user!);
         }
       }
       return result;
@@ -112,6 +125,7 @@ class ModeController extends StateNotifier<ModeState> {
     if (authAccess != null) {
       _authAccessState = authAccess.accessState;
       _user = authAccess.user;
+      _socketService.setCurrentUserId(_user?.id);
     }
     if (connection != null) {
       updateDetectedConnection(connection, runSync: false);
@@ -224,6 +238,7 @@ class ModeController extends StateNotifier<ModeState> {
     ConnectionModeState connection, {
     bool runSync = true,
   }) {
+    final wasBackendReachable = state.backendReachable;
     state = state.copyWith(
       connectionState: _detectedFrom(connection.mode),
       backendReachable: connection.backendReachable,
@@ -232,11 +247,19 @@ class ModeController extends StateNotifier<ModeState> {
       socketConnected: _socketService.isConnected,
     );
     _recalculate(runSync: runSync);
+    if (!wasBackendReachable && connection.backendReachable) {
+      unawaited(
+        TrailNotificationService.instance.notifyInternetAvailable(
+          cloudPaused: state.userMode == UserMode.offline,
+        ),
+      );
+    }
   }
 
   void updateAuthAccess(AuthAccessState accessState, UserModel? user) {
     _authAccessState = accessState;
     _user = user;
+    _socketService.setCurrentUserId(user?.id);
     _recalculate();
   }
 

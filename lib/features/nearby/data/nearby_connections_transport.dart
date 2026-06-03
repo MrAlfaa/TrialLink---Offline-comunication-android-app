@@ -24,6 +24,8 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
   final _packetController = StreamController<String>.broadcast();
   final Map<String, NearbyPeerModel> _peers = {};
 
+  bool _isAdvertising = false;
+  bool _isDiscovering = false;
   String? _currentEndpointName;
   NearbyAdvertisementPayload? _currentPayload;
   String? _activeChannelCode;
@@ -44,12 +46,22 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
   Stream<String> get packetReceivedStream => _packetController.stream;
 
   @override
+  bool get isAdvertising => _isAdvertising;
+
+  @override
+  bool get isDiscovering => _isDiscovering;
+
+  @override
   Future<void> startAdvertising({
     required String userId,
     required String displayName,
     required String activeChannelId,
     required String activeChannelCode,
     String? tripId,
+    String? tripName,
+    String? ownerLocalId,
+    String? ownerName,
+    String memberRole = 'member',
     String? publicUserId,
     String? appDeviceId,
     List<String> capabilities = const ['text'],
@@ -65,6 +77,10 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
       deviceName: deviceName,
       timestamp: DateTime.now(),
       tripId: tripId,
+      tripName: tripName,
+      ownerLocalId: ownerLocalId,
+      ownerName: ownerName,
+      memberRole: memberRole,
       publicUserId: publicUserId,
       appDeviceId: appDeviceId,
       capabilities: capabilities,
@@ -72,6 +88,8 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
     );
     _currentEndpointName = _currentPayload!.toEndpointName();
 
+    await _bestEffortStop('restart_advertising', _nearby.stopAdvertising);
+    _isAdvertising = false;
     final ok = await _nearby.startAdvertising(
       _currentEndpointName!,
       _strategy,
@@ -80,15 +98,21 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
       onConnectionResult: _onConnectionResult,
       onDisconnected: _onDisconnected,
     );
-    if (!ok) throw StateError('Could not start Nearby advertising.');
+    if (!ok) throw StateError('Could not make this phone visible.');
+    _isAdvertising = true;
   }
 
   @override
-  Future<void> stopAdvertising() => _nearby.stopAdvertising();
+  Future<void> stopAdvertising() async {
+    await _nearby.stopAdvertising();
+    _isAdvertising = false;
+  }
 
   @override
   Future<void> startDiscovery({required String activeChannelCode}) async {
     _activeChannelCode = activeChannelCode;
+    await _bestEffortStop('restart_discovery', _nearby.stopDiscovery);
+    _isDiscovering = false;
     final ok = await _nearby.startDiscovery(
       _currentEndpointName ?? 'TrailLink',
       _strategy,
@@ -116,11 +140,15 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
         _lostController.add(endpointId);
       },
     );
-    if (!ok) throw StateError('Could not start Nearby discovery.');
+    if (!ok) throw StateError('Could not start finding phones.');
+    _isDiscovering = true;
   }
 
   @override
-  Future<void> stopDiscovery() => _nearby.stopDiscovery();
+  Future<void> stopDiscovery() async {
+    await _nearby.stopDiscovery();
+    _isDiscovering = false;
+  }
 
   @override
   Future<void> connectToPeer(String endpointId) async {
@@ -161,6 +189,8 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
   Future<void> disconnectAllPeers() async {
     await _nearby.stopAdvertising();
     await _nearby.stopDiscovery();
+    _isAdvertising = false;
+    _isDiscovering = false;
     final endpointIds = _peers.keys.toList(growable: false);
     for (final endpointId in endpointIds) {
       await _nearby.disconnectFromEndpoint(endpointId);
@@ -239,6 +269,10 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
             packetJson: packetJson,
             byteLength: payload.bytes!.length,
           );
+          _rememberConnectedPeerFromPacket(
+            endpointId: id,
+            packetJson: packetJson,
+          );
           _packetController.add(packetJson);
         } catch (error) {
           _debugNearbyPacket(
@@ -306,12 +340,19 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
   }) {
     try {
       final payload = NearbyAdvertisementPayload.fromEndpointName(endpointName);
+      if (_isCurrentDevicePayload(payload)) return null;
       final channelCode = _activeChannelCode;
       if (channelCode == null || !payload.isCompatibleWith(channelCode)) {
         return null;
       }
       final now = DateTime.now();
       final existing = _peers[endpointId];
+      final status = switch (existing?.status) {
+        PeerConnectionStatus.connected ||
+        PeerConnectionStatus.connecting =>
+          existing!.status,
+        _ => fallbackStatus,
+      };
       return NearbyPeerModel(
         endpointId: endpointId,
         userId: payload.userId,
@@ -323,7 +364,7 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
         publicUserId: payload.publicUserId,
         appDeviceId: payload.appDeviceId,
         verificationStatus: 'unknown_same_channel',
-        status: existing?.status ?? fallbackStatus,
+        status: status,
         discoveredAt: existing?.discoveredAt ?? now,
         lastSeenAt: now,
         isSameChannel: true,
@@ -334,14 +375,127 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
   }
 
   void _emitConnection(NearbyPeerModel peer) {
+    if (_isCurrentPeer(peer)) return;
     _peers[peer.endpointId] = peer;
     _connectionController.add(peer);
+  }
+
+  void _rememberConnectedPeerFromPacket({
+    required String endpointId,
+    required String packetJson,
+  }) {
+    try {
+      final data = jsonDecode(packetJson) as Map<String, dynamic>;
+      final packetChannelCode = data['channelCode']?.toString();
+      final senderLocalId = data['senderLocalId']?.toString();
+      final senderId = data['senderId']?.toString();
+      if (_isCurrentSender(senderLocalId) || _isCurrentSender(senderId)) {
+        return;
+      }
+      final channelCode = _activeChannelCode;
+      if (channelCode == null ||
+          packetChannelCode == null ||
+          packetChannelCode != channelCode) {
+        return;
+      }
+
+      final payload = data['payload'];
+      final payloadMap = payload is Map<String, dynamic> ? payload : null;
+      final now = DateTime.now();
+      final existing = _peers[endpointId];
+      final peer = NearbyPeerModel(
+        endpointId: endpointId,
+        userId: _stringFrom(
+              payloadMap,
+              'localUserId',
+              fallback: data['senderLocalId']?.toString(),
+            ) ??
+            data['senderId']?.toString() ??
+            endpointId,
+        displayName: _stringFrom(
+              payloadMap,
+              'displayName',
+              fallback: data['senderName']?.toString(),
+            ) ??
+            'Nearby phone',
+        deviceName: _stringFrom(payloadMap, 'deviceName') ?? 'Nearby phone',
+        activeChannelId: _stringFrom(
+              payloadMap,
+              'activeChannelId',
+              fallback: data['channelId']?.toString(),
+            ) ??
+            '',
+        activeChannelCode: packetChannelCode,
+        tripId: _stringFrom(payloadMap, 'tripId'),
+        publicUserId: _stringFrom(
+          payloadMap,
+          'publicUserId',
+          fallback: data['senderId']?.toString(),
+        ),
+        appDeviceId: _stringFrom(payloadMap, 'appDeviceId'),
+        verificationStatus:
+            existing?.verificationStatus ?? 'unknown_same_channel',
+        status: PeerConnectionStatus.connected,
+        discoveredAt: existing?.discoveredAt ?? now,
+        lastSeenAt: now,
+        isSameChannel: true,
+      );
+      _emitConnection(peer);
+      _debugNearbyPacket(
+        'rx_peer_promoted',
+        endpointId: endpointId,
+        packetJson: packetJson,
+        reason: 'Incoming packet confirmed a live same-channel endpoint.',
+      );
+    } catch (error) {
+      _debugNearbyPacket(
+        'rx_peer_promote_failed',
+        endpointId: endpointId,
+        packetJson: packetJson,
+        reason: error.toString(),
+      );
+    }
+  }
+
+  bool _isCurrentDevicePayload(NearbyAdvertisementPayload payload) {
+    final current = _currentPayload;
+    if (current == null) return false;
+    return _sameNonEmpty(payload.appDeviceId, current.appDeviceId) ||
+        _sameNonEmpty(payload.publicUserId, current.publicUserId) ||
+        _sameNonEmpty(payload.userId, current.userId);
+  }
+
+  bool _isCurrentPeer(NearbyPeerModel peer) {
+    final current = _currentPayload;
+    if (current == null) return false;
+    return _sameNonEmpty(peer.appDeviceId, current.appDeviceId) ||
+        _sameNonEmpty(peer.publicUserId, current.publicUserId) ||
+        _sameNonEmpty(peer.userId, current.userId);
+  }
+
+  bool _isCurrentSender(String? senderId) {
+    final current = _currentPayload;
+    if (current == null) return false;
+    return _sameNonEmpty(senderId, current.userId) ||
+        _sameNonEmpty(senderId, current.publicUserId);
   }
 
   Future<String> _deviceName() async {
     if (!Platform.isAndroid) return 'TrailLink Device';
     final info = await DeviceInfoPlugin().androidInfo;
     return '${info.manufacturer} ${info.model}'.trim();
+  }
+
+  Future<void> _bestEffortStop(
+    String action,
+    Future<void> Function() stop,
+  ) async {
+    try {
+      await stop();
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+    } catch (error) {
+      _debugNearbyLifecycle(action, reason: error.toString());
+    }
   }
 
   Future<void> _sendPeerHello(String endpointId) async {
@@ -358,6 +512,7 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
       'targetType': 'broadcast',
       'requiresAck': false,
       'payload': payload.toPeerHelloJson(),
+      'tripName': payload.tripName,
       'createdAt': DateTime.now().toIso8601String(),
     });
     try {
@@ -377,11 +532,28 @@ class NearbyConnectionsTransport implements NearbyPacketTransport {
     await _nearby.stopDiscovery();
     await _nearby.stopAdvertising();
     await _nearby.stopAllEndpoints();
+    _isAdvertising = false;
+    _isDiscovering = false;
     await _discoveredController.close();
     await _lostController.close();
     await _connectionController.close();
     await _packetController.close();
   }
+}
+
+bool _sameNonEmpty(String? left, String? right) {
+  final leftValue = left?.trim();
+  final rightValue = right?.trim();
+  if (leftValue == null || leftValue.isEmpty) return false;
+  if (rightValue == null || rightValue.isEmpty) return false;
+  return leftValue == rightValue;
+}
+
+void _debugNearbyLifecycle(String event, {String? reason}) {
+  if (!kDebugMode) return;
+  debugPrint(
+    '[TrailLink][NearbyLifecycle] event=$event reason=${reason ?? '-'}',
+  );
 }
 
 void _debugNearbyPacket(
@@ -428,4 +600,18 @@ Map<String, Object?> _packetSummary(String? packetJson) {
   } catch (_) {
     return const {};
   }
+}
+
+String? _stringFrom(
+  Map<String, dynamic>? data,
+  String key, {
+  String? fallback,
+}) {
+  final value = data?[key]?.toString().trim();
+  if (value != null && value.isNotEmpty) return value;
+  final fallbackValue = fallback?.trim();
+  if (fallbackValue != null && fallbackValue.isNotEmpty) {
+    return fallbackValue;
+  }
+  return null;
 }

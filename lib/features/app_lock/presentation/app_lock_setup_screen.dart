@@ -98,14 +98,14 @@ class _AppLockSetupScreenState extends ConsumerState<AppLockSetupScreen> {
                   onChanged: (value) => setState(() => _biometric = value),
                 ),
                 SettingsToggleTile(
-                  title: 'TrailLink PIN fallback',
+                  title: 'Backup TrailLink PIN',
                   value: pinRequired || _pinFallback,
                   onChanged: (value) {
                     if (pinRequired && !value) {
                       setState(() {
                         _pinFallback = true;
                         _error =
-                            'Create a 4-digit TrailLink PIN before disabling PIN fallback.';
+                            'Create a 4-digit TrailLink PIN before turning off the backup PIN.';
                       });
                       return;
                     }

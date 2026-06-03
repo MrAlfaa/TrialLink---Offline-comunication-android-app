@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:traillink/core/mode/mode_models.dart';
+import 'package:traillink/core/mode/mode_controller.dart';
 import 'package:traillink/features/chat/presentation/chat_hub_screen.dart';
 import 'package:traillink/features/chat/presentation/widgets/chat_app_bar.dart';
 import 'package:traillink/features/chat/presentation/widgets/chat_input_bar.dart';
@@ -82,6 +83,36 @@ void main() {
               createdAt: DateTime(2026),
             ),
           ),
+          modeScopedActiveTripProvider.overrideWith(
+            (ref) async => TripSessionModel(
+              tripId: 'trip-1',
+              tripName: 'Knuckles Offline',
+              mode: 'offline',
+              offlineChannelId: 'channel-1',
+              channelCode: 'TL-OFF-82KD',
+              channelName: 'Knuckles Offline',
+              localIdentityId: 'local-1',
+              status: 'active',
+              startedAt: DateTime(2026),
+              syncState: 'local_only',
+              createdAt: DateTime(2026),
+            ),
+          ),
+          modeStateProvider.overrideWithValue(
+            const ModeState(
+              modeControlType: ModeControlType.manual,
+              userMode: UserMode.offline,
+              manualCommunicationMode: ManualCommunicationMode.offline,
+              connectionState: DetectedConnectionState.backendOffline,
+              effectiveMode: EffectiveMode.offline,
+              autoSwitchEnabled: false,
+              backendReachable: false,
+              hasNetworkInterface: false,
+              socketConnected: false,
+              nearbyAvailable: true,
+              connectedPeerCount: 0,
+            ),
+          ),
         ],
         child: const MaterialApp(
           home: ChatHubScreen(initialTab: 'offline'),
@@ -91,7 +122,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Messages'), findsOneWidget);
-    expect(find.text('Offline Channels'), findsOneWidget);
+    expect(find.text('Offline Chats'), findsOneWidget);
     expect(find.text('Knuckles Offline'), findsWidgets);
     expect(find.text('TL-OFF-82KD'), findsWidgets);
   });
@@ -103,7 +134,7 @@ void main() {
         home: Scaffold(
           appBar: ChatAppBar(
             title: 'Knuckles Hiking Team',
-            subtitle: 'Cloud chat - Offline backup',
+            subtitle: 'Cloud chat - Offline support',
             chips: [
               ChatHeaderChip(
                 label: 'Saved locally',
@@ -123,7 +154,7 @@ void main() {
     );
 
     expect(find.text('Knuckles Hiking Team'), findsOneWidget);
-    expect(find.text('Cloud chat - Offline backup'), findsOneWidget);
+    expect(find.text('Cloud chat - Offline support'), findsOneWidget);
     expect(find.text('Saved locally'), findsOneWidget);
     expect(find.text('3 pending'), findsOneWidget);
     expect(find.text('Offline Mode'), findsNothing);
@@ -205,6 +236,24 @@ void main() {
         reason: '$path should use compact status chips, not large banners.',
       );
     }
+  });
+
+  test('splash screen is scroll-safe for landscape and short displays', () {
+    final splash =
+        File('lib/features/splash/splash_screen.dart').readAsStringSync();
+
+    expect(splash, contains('LayoutBuilder'));
+    expect(splash, contains('SingleChildScrollView'));
+    expect(splash, contains('constraints.maxHeight < 560'));
+    expect(splash, contains('minHeight: constraints.maxHeight'));
+  });
+
+  test('mobile app locks to portrait to prevent tool/nav overlap', () {
+    final main = File('lib/main.dart').readAsStringSync();
+
+    expect(main, contains('SystemChrome.setPreferredOrientations'));
+    expect(main, contains('DeviceOrientation.portraitUp'));
+    expect(main, contains('DeviceOrientation.portraitDown'));
   });
 
   test('dashboard does not expose system status entry points', () {

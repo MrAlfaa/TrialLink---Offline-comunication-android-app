@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/mode/mode_controller.dart';
+import '../../../core/mode/mode_models.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../trip/data/trip_session_service.dart';
 import '../../trip_context/data/cloud_prepared_trip_repository.dart';
 import 'group_controller.dart';
 
@@ -34,9 +37,13 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
         );
 
     ref.invalidate(myGroupsProvider);
+    ref.invalidate(modeScopedActiveTripProvider);
+    await ref
+        .read(modeControllerProvider.notifier)
+        .setManualCommunicationMode(ManualCommunicationMode.online);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Offline backup prepared')),
+      const SnackBar(content: Text('Nearby-phone support ready')),
     );
     context.go('/groups/${metadata.group.id}');
   }
@@ -46,18 +53,18 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
     final state = ref.watch(groupMutationControllerProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Join Group')),
+      appBar: AppBar(title: const Text('Join Online Trip')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
             Text(
-              'Join with group code',
+              'Join with trip code',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
             const SizedBox(height: 8),
             Text(
-              'Ask the group owner for a TrailLink code such as TL-8F3K2.',
+              'Ask the trip owner for a TrailLink code such as TL-8F3K2.',
               style: Theme.of(context).textTheme.bodyLarge,
             ),
             const SizedBox(height: 18),
@@ -72,7 +79,7 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
                         controller: _codeController,
                         textCapitalization: TextCapitalization.characters,
                         decoration: const InputDecoration(
-                          labelText: 'Group code',
+                          labelText: 'Trip code',
                           prefixIcon: Icon(Icons.confirmation_number_rounded),
                         ),
                         validator: (value) {
@@ -93,7 +100,7 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
                         ),
                       const SizedBox(height: 18),
                       PrimaryButton(
-                        label: 'Join Group',
+                        label: 'Join Trip',
                         icon: Icons.login_rounded,
                         isLoading: state.isLoading,
                         onPressed: _submit,

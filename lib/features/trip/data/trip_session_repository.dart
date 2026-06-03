@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/database/local_database.dart';
 import '../../../core/identity/local_identity_model.dart';
+import '../../../core/mode/mode_models.dart';
 import '../../groups/data/group_repository.dart';
 import '../../groups/data/models/group_model.dart';
 import '../../offline_channel/data/offline_channel_repository.dart';
@@ -27,6 +28,8 @@ class TripSessionRepository {
   final LocalDatabase _database;
   final OfflineChannelRepository _offlineChannelRepository;
   final Uuid _uuid;
+  static const activeOnlineTripSettingKey = 'active_online_trip_id';
+  static const activeOfflineTripSettingKey = 'active_offline_trip_id';
 
   Future<TripSessionModel?> getActiveTrip() async {
     final db = await _database.database;
@@ -38,6 +41,52 @@ class TripSessionRepository {
       limit: 1,
     );
     return rows.isEmpty ? null : TripSessionModel.fromDb(rows.first);
+  }
+
+  Future<TripSessionModel?> getActiveTripForMode(EffectiveMode mode) async {
+    final db = await _database.database;
+    final key = _activeTripSettingKeyForMode(mode);
+    final selectedTripId = await _database.readSetting(key);
+    if (selectedTripId != null && selectedTripId.trim().isNotEmpty) {
+      final selected = await getTrip(selectedTripId);
+      if (selected != null &&
+          _matchesEffectiveMode(selected, mode) &&
+          _isUsableTripStatus(selected.status)) {
+        return selected;
+      }
+    }
+
+    final rows = await db.query(
+      'trip_sessions',
+      where: '${_modeWhereClause(mode)} AND status NOT IN (?, ?)',
+      whereArgs: [..._modeWhereArgs(mode), 'archived', 'completed'],
+      orderBy:
+          "CASE status WHEN 'active' THEN 0 ELSE 1 END, COALESCE(last_opened_at, started_at, created_at) DESC",
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    final fallback = TripSessionModel.fromDb(rows.first);
+    await _database.upsertSetting(key, fallback.tripId);
+    return fallback;
+  }
+
+  Future<void> setActiveTripForMode(
+    EffectiveMode mode,
+    String tripId,
+  ) async {
+    final trip = await getTrip(tripId);
+    if (trip == null) {
+      throw StateError('Trip not found.');
+    }
+    if (!_matchesEffectiveMode(trip, mode)) {
+      throw StateError('Trip does not belong to the selected mode.');
+    }
+    await _markTripActiveWithinMode(trip);
+    await _database.upsertSetting(_activeTripSettingKeyForMode(mode), tripId);
+    final channelId = trip.activeChannelId ?? trip.offlineChannelId;
+    if (trip.mode == 'offline' && channelId != null && channelId.isNotEmpty) {
+      await _activateTripChannel(tripId: tripId, channelId: channelId);
+    }
   }
 
   Future<List<TripSessionModel>> getTrips() async {
@@ -122,7 +171,7 @@ class TripSessionRepository {
       identity: identity,
       channelName: tripName.trim(),
       description: description.trim().isEmpty
-          ? 'Offline backup channel for ${tripName.trim()}.'
+          ? 'Offline support channel for ${tripName.trim()}.'
           : description.trim(),
       customCode: customChannelCode,
     );
@@ -191,7 +240,7 @@ class TripSessionRepository {
       channel = await _offlineChannelRepository.createChannelForIdentity(
         identity: identity,
         channelName: group.groupName,
-        description: 'Offline backup channel for ${group.groupName}.',
+        description: 'Offline support channel for ${group.groupName}.',
       );
     }
     return _insertHybridTrip(
@@ -304,25 +353,12 @@ class TripSessionRepository {
   }
 
   Future<void> setActiveTrip(String tripId) async {
-    final db = await _database.database;
-    final now = DateTime.now().toIso8601String();
-    await db.transaction((txn) async {
-      await txn.update(
-        'trip_sessions',
-        {'status': 'inactive', 'updated_at': now},
-        where: 'status = ?',
-        whereArgs: ['active'],
-      );
-      await txn.update(
-        'trip_sessions',
-        {'status': 'active', 'last_opened_at': now, 'updated_at': now},
-        where: 'trip_id = ?',
-        whereArgs: [tripId],
-      );
-    });
-    final active = await getActiveTrip();
-    final channelId = active?.activeChannelId ?? active?.offlineChannelId;
-    if (channelId != null && channelId.isNotEmpty) {
+    final trip = await getTrip(tripId);
+    if (trip == null) throw StateError('Trip not found.');
+    await _markTripActiveWithinMode(trip);
+    await _database.upsertSetting(_settingKeyForTrip(trip), tripId);
+    final channelId = trip.activeChannelId ?? trip.offlineChannelId;
+    if (trip.mode == 'offline' && channelId != null && channelId.isNotEmpty) {
       await _activateTripChannel(tripId: tripId, channelId: channelId);
     }
   }
@@ -414,8 +450,8 @@ class TripSessionRepository {
       await txn.update(
         'trip_sessions',
         {'status': 'inactive', 'updated_at': now},
-        where: 'status = ?',
-        whereArgs: ['active'],
+        where: 'status = ? AND ${_modeWhereClauseForTrip(trip)}',
+        whereArgs: ['active', ..._modeWhereArgsForTrip(trip)],
       );
       await txn.insert(
         'trip_sessions',
@@ -439,8 +475,9 @@ class TripSessionRepository {
         );
       }
     });
+    await _database.upsertSetting(_settingKeyForTrip(trip), trip.tripId);
     await _ensureDefaultChatForTrip(trip);
-    return (await getActiveTrip()) ?? trip;
+    return (await getTrip(trip.tripId)) ?? trip;
   }
 
   Future<TripSessionModel> _insertAsInactive(TripSessionModel trip) async {
@@ -598,5 +635,68 @@ class TripSessionRepository {
     if (trimmed.length < 3 || trimmed.length > 60) {
       throw StateError('Trip name must be 3-60 characters.');
     }
+  }
+
+  Future<void> _markTripActiveWithinMode(TripSessionModel trip) async {
+    final db = await _database.database;
+    final now = DateTime.now().toIso8601String();
+    await db.transaction((txn) async {
+      await txn.update(
+        'trip_sessions',
+        {'status': 'inactive', 'updated_at': now},
+        where: 'status = ? AND ${_modeWhereClauseForTrip(trip)}',
+        whereArgs: ['active', ..._modeWhereArgsForTrip(trip)],
+      );
+      await txn.update(
+        'trip_sessions',
+        {'status': 'active', 'last_opened_at': now, 'updated_at': now},
+        where: 'trip_id = ?',
+        whereArgs: [trip.tripId],
+      );
+    });
+  }
+
+  static bool _isUsableTripStatus(String status) {
+    return status != 'archived' && status != 'completed';
+  }
+
+  static bool _matchesEffectiveMode(TripSessionModel trip, EffectiveMode mode) {
+    return switch (mode) {
+      EffectiveMode.online => trip.mode == 'online' || trip.mode == 'hybrid',
+      EffectiveMode.offline => trip.mode == 'offline',
+      EffectiveMode.hybridLimited => trip.mode == 'offline',
+    };
+  }
+
+  static String _activeTripSettingKeyForMode(EffectiveMode mode) {
+    return mode == EffectiveMode.online
+        ? activeOnlineTripSettingKey
+        : activeOfflineTripSettingKey;
+  }
+
+  static String _settingKeyForTrip(TripSessionModel trip) {
+    return trip.mode == 'offline'
+        ? activeOfflineTripSettingKey
+        : activeOnlineTripSettingKey;
+  }
+
+  static String _modeWhereClause(EffectiveMode mode) {
+    return mode == EffectiveMode.online ? 'mode IN (?, ?)' : 'mode = ?';
+  }
+
+  static List<String> _modeWhereArgs(EffectiveMode mode) {
+    return mode == EffectiveMode.online
+        ? const ['online', 'hybrid']
+        : const ['offline'];
+  }
+
+  static String _modeWhereClauseForTrip(TripSessionModel trip) {
+    return trip.mode == 'offline' ? 'mode = ?' : 'mode IN (?, ?)';
+  }
+
+  static List<String> _modeWhereArgsForTrip(TripSessionModel trip) {
+    return trip.mode == 'offline'
+        ? const ['offline']
+        : const ['online', 'hybrid'];
   }
 }

@@ -97,6 +97,7 @@ class P2PSessionRepository {
   Future<List<P2PPeerConnectionModel>> getPeersForSession(
     String sessionId,
   ) async {
+    await _collapseDuplicatePeersForSession(sessionId);
     final db = await _database.database;
     final rows = await db.query(
       'p2p_connected_peers',
@@ -125,52 +126,174 @@ class P2PSessionRepository {
     if ((endpointId ?? '').isEmpty && (peerLocalId ?? '').isEmpty) return;
     final db = await _database.database;
     final now = DateTime.now().toIso8601String();
-    final existing = await db.query(
-      'p2p_connected_peers',
-      where: 'session_id = ? AND (endpoint_id = ? OR peer_local_id = ?)',
-      whereArgs: [session.sessionId, endpointId, peerLocalId],
-      limit: 1,
-    );
-    final values = {
-      'session_id': session.sessionId,
-      'trip_id': session.tripId,
-      'channel_id': session.channelId,
-      'channel_code': session.channelCode,
-      'endpoint_id': endpointId,
-      'peer_local_id': peerLocalId,
-      'peer_public_user_id': peerPublicUserId,
-      'peer_display_name': peerDisplayName,
-      'connection_state': state.name,
-      'last_seen_at': now,
-      if (heartbeat) 'last_heartbeat_at': now,
-      'created_at': now,
-      'updated_at': now,
-    };
-    if (existing.isEmpty) {
-      await db.insert(
-        'p2p_connected_peers',
-        values,
-        conflictAlgorithm: ConflictAlgorithm.replace,
+    await db.transaction((txn) async {
+      final existing = await _matchingPeerRows(
+        txn,
+        sessionId: session.sessionId,
+        endpointId: endpointId,
+        peerLocalId: peerLocalId,
+        peerPublicUserId: peerPublicUserId,
       );
-      return;
-    }
-    await db.update(
-      'p2p_connected_peers',
-      {
-        'endpoint_id': endpointId ?? existing.first['endpoint_id'],
-        'peer_local_id': peerLocalId ?? existing.first['peer_local_id'],
-        'peer_public_user_id':
-            peerPublicUserId ?? existing.first['peer_public_user_id'],
-        'peer_display_name':
-            peerDisplayName ?? existing.first['peer_display_name'],
+      final insertValues = {
+        'session_id': session.sessionId,
+        'trip_id': session.tripId,
+        'channel_id': session.channelId,
+        'channel_code': session.channelCode,
+        'endpoint_id': endpointId,
+        'peer_local_id': peerLocalId,
+        'peer_public_user_id': peerPublicUserId,
+        'peer_display_name': peerDisplayName,
         'connection_state': state.name,
         'last_seen_at': now,
         if (heartbeat) 'last_heartbeat_at': now,
+        'created_at': now,
         'updated_at': now,
-      },
-      where: 'id = ?',
-      whereArgs: [existing.first['id']],
+      };
+      if (existing.isEmpty) {
+        await txn.insert(
+          'p2p_connected_peers',
+          insertValues,
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+        return;
+      }
+
+      final keeper = _selectPeerKeeper(existing, state);
+      final keeperId = keeper['id'] as int;
+      final duplicateIds = existing
+          .map((row) => row['id'] as int)
+          .where((id) => id != keeperId)
+          .toList(growable: false);
+      if (duplicateIds.isNotEmpty) {
+        await txn.delete(
+          'p2p_connected_peers',
+          where: 'id IN (${List.filled(duplicateIds.length, '?').join(', ')})',
+          whereArgs: duplicateIds,
+        );
+      }
+      await txn.update(
+        'p2p_connected_peers',
+        _mergePeerRows(
+          keeper,
+          endpointId: endpointId,
+          peerLocalId: peerLocalId,
+          peerPublicUserId: peerPublicUserId,
+          peerDisplayName: peerDisplayName,
+          state: state,
+          heartbeat: heartbeat,
+          now: now,
+        ),
+        where: 'id = ?',
+        whereArgs: [keeperId],
+      );
+    });
+  }
+
+  Future<List<Map<String, Object?>>> _matchingPeerRows(
+    Transaction txn, {
+    required String sessionId,
+    String? endpointId,
+    String? peerLocalId,
+    String? peerPublicUserId,
+  }) {
+    final clauses = <String>[];
+    final args = <Object?>[sessionId];
+    void addMatch(String column, String? value) {
+      final trimmed = value?.trim();
+      if (trimmed == null || trimmed.isEmpty) return;
+      clauses.add('$column = ?');
+      args.add(trimmed);
+    }
+
+    addMatch('endpoint_id', endpointId);
+    addMatch('peer_local_id', peerLocalId);
+    addMatch('peer_public_user_id', peerPublicUserId);
+    if (clauses.isEmpty) return Future.value(const []);
+    return txn.query(
+      'p2p_connected_peers',
+      where: 'session_id = ? AND (${clauses.join(' OR ')})',
+      whereArgs: args,
     );
+  }
+
+  Map<String, Object?> _selectPeerKeeper(
+    List<Map<String, Object?>> rows,
+    P2PPeerConnectionState nextState,
+  ) {
+    return rows.reduce((current, candidate) {
+      final currentRank = _peerRowRank(current, nextState);
+      final candidateRank = _peerRowRank(candidate, nextState);
+      if (candidateRank != currentRank) {
+        return candidateRank > currentRank ? candidate : current;
+      }
+      final currentTime = DateTime.tryParse(
+            current['updated_at']?.toString() ??
+                current['last_seen_at']?.toString() ??
+                '',
+          ) ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      final candidateTime = DateTime.tryParse(
+            candidate['updated_at']?.toString() ??
+                candidate['last_seen_at']?.toString() ??
+                '',
+          ) ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      return candidateTime.isAfter(currentTime) ? candidate : current;
+    });
+  }
+
+  int _peerRowRank(
+    Map<String, Object?> row,
+    P2PPeerConnectionState nextState,
+  ) {
+    var rank = _peerStateRank(
+      P2PPeerConnectionState.parse(row['connection_state']?.toString() ?? ''),
+    );
+    rank = rank > _peerStateRank(nextState) ? rank : _peerStateRank(nextState);
+    if ((row['endpoint_id']?.toString().trim().isNotEmpty ?? false)) {
+      rank += 3;
+    }
+    if ((row['peer_local_id']?.toString().trim().isNotEmpty ?? false)) {
+      rank += 2;
+    }
+    if ((row['peer_public_user_id']?.toString().trim().isNotEmpty ?? false)) {
+      rank += 2;
+    }
+    return rank;
+  }
+
+  Map<String, Object?> _mergePeerRows(
+    Map<String, Object?> existing, {
+    String? endpointId,
+    String? peerLocalId,
+    String? peerPublicUserId,
+    String? peerDisplayName,
+    required P2PPeerConnectionState state,
+    required bool heartbeat,
+    required String now,
+  }) {
+    return {
+      'endpoint_id': _firstNonEmpty(endpointId, existing['endpoint_id']),
+      'peer_local_id': _firstNonEmpty(peerLocalId, existing['peer_local_id']),
+      'peer_public_user_id':
+          _firstNonEmpty(peerPublicUserId, existing['peer_public_user_id']),
+      'peer_display_name':
+          _firstNonEmpty(peerDisplayName, existing['peer_display_name']),
+      'connection_state': state.name,
+      'last_seen_at': now,
+      if (heartbeat) 'last_heartbeat_at': now,
+      'updated_at': now,
+    };
+  }
+
+  Object? _firstNonEmpty(String? incoming, Object? existing) {
+    final trimmedIncoming = incoming?.trim();
+    if (trimmedIncoming != null && trimmedIncoming.isNotEmpty) {
+      return incoming;
+    }
+    final existingText = existing?.toString().trim();
+    if (existingText != null && existingText.isNotEmpty) return existing;
+    return null;
   }
 
   Future<void> updatePeerState(
@@ -271,5 +394,62 @@ class P2PSessionRepository {
       where: 'id = ?',
       whereArgs: [id],
     );
+  }
+
+  Future<void> _collapseDuplicatePeersForSession(String sessionId) async {
+    final db = await _database.database;
+    await db.transaction((txn) async {
+      final rows = await txn.query(
+        'p2p_connected_peers',
+        where: 'session_id = ?',
+        whereArgs: [sessionId],
+      );
+      final grouped = <String, List<Map<String, Object?>>>{};
+      for (final row in rows) {
+        final key = _peerIdentityKey(row);
+        if (key == null) continue;
+        grouped.putIfAbsent(key, () => []).add(row);
+      }
+      for (final group in grouped.values.where((items) => items.length > 1)) {
+        final keeper = _selectPeerKeeper(
+          group,
+          P2PPeerConnectionState.parse(
+            group.first['connection_state']?.toString() ?? '',
+          ),
+        );
+        final keeperId = keeper['id'] as int;
+        final duplicateIds = group
+            .map((row) => row['id'] as int)
+            .where((id) => id != keeperId)
+            .toList(growable: false);
+        if (duplicateIds.isEmpty) continue;
+        await txn.delete(
+          'p2p_connected_peers',
+          where: 'id IN (${List.filled(duplicateIds.length, '?').join(', ')})',
+          whereArgs: duplicateIds,
+        );
+      }
+    });
+  }
+
+  String? _peerIdentityKey(Map<String, Object?> row) {
+    final publicId = row['peer_public_user_id']?.toString().trim();
+    if (publicId != null && publicId.isNotEmpty) return 'public:$publicId';
+    final localId = row['peer_local_id']?.toString().trim();
+    if (localId != null && localId.isNotEmpty) return 'local:$localId';
+    return null;
+  }
+
+  int _peerStateRank(P2PPeerConnectionState state) {
+    return switch (state) {
+      P2PPeerConnectionState.connected => 70,
+      P2PPeerConnectionState.connecting => 60,
+      P2PPeerConnectionState.discovered => 50,
+      P2PPeerConnectionState.stale => 40,
+      P2PPeerConnectionState.disconnecting => 30,
+      P2PPeerConnectionState.disconnected => 20,
+      P2PPeerConnectionState.lost => 10,
+      P2PPeerConnectionState.failed => 0,
+    };
   }
 }

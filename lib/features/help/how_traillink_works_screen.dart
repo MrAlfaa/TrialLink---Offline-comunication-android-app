@@ -10,18 +10,18 @@ class HowTrailLinkWorksScreen extends StatelessWidget {
     const items = [
       (
         Icons.hiking_rounded,
-        'Start or join a trip',
-        'A trip connects messages, SOS, map, nearby phones, and walkie-talkie tools in one place.',
+        'Choose a trip path',
+        'Create an online trip, create an offline trip, or join with a code from your team.',
       ),
       (
         Icons.cloud_done_rounded,
-        'Online mode uses cloud chat',
-        'When internet is available, TrailLink can use cloud groups for team chat and syncing.',
+        'Online trips use internet chat',
+        'When internet is available, team chat and membership use the TrailLink server.',
       ),
       (
         Icons.hub_rounded,
-        'Offline mode uses nearby phones and channel code',
-        'In remote areas, teammates use the same offline channel code and connect phones nearby.',
+        'Offline trips use nearby phones',
+        'In remote areas, teammates use the same trip code and connect phones nearby.',
       ),
       (
         Icons.sos_rounded,
@@ -40,8 +40,8 @@ class HowTrailLinkWorksScreen extends StatelessWidget {
       ),
       (
         Icons.sync_rounded,
-        'Data saves locally first and syncs later',
-        'TrailLink keeps your latest known trip data on this phone and syncs when Online Mode is ready.',
+        'Online trips keep nearby support ready',
+        'TrailLink saves the trip code and teammate details on this phone so the trip can keep working in remote areas.',
       ),
     ];
 
@@ -57,7 +57,7 @@ class HowTrailLinkWorksScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'The app chooses online, offline, or saved-local paths based on your mode and connection.',
+              'Online chat uses the internet. Nearby phone connection is for offline trips, remote areas, and safety support.',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: AppColors.mutedText,
                   ),

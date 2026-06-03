@@ -42,14 +42,14 @@ void main() {
           body: ChatInputBar(
             onSend: (_) {},
             offlineHint:
-                'Media is online-only. Offline mode supports text and voice-note PTT.',
+                'Photos need internet. Offline trips support text and voice notes.',
           ),
         ),
       ),
     );
 
     expect(find.byIcon(Icons.add_circle_outline_rounded), findsNothing);
-    expect(find.textContaining('Media is online-only'), findsOneWidget);
+    expect(find.textContaining('Photos need internet'), findsOneWidget);
   });
 
   test('chat message model maps media metadata from API and DB', () {
@@ -138,7 +138,7 @@ void main() {
     final chatSource = File('lib/features/chat/presentation/chat_screen.dart')
         .readAsStringSync();
 
-    expect(dbSource, contains('version: 22'));
+    expect(dbSource, contains('version: 24'));
     expect(dbSource, contains('local_file_path'));
     expect(dbSource, contains('upload_status'));
     expect(chatSource, contains('state.isOnline &&'));

@@ -8,11 +8,11 @@ class ChatModeLabel {
     if (!isOnline) return 'Offline Chat';
     return switch (socketState) {
       'connected' => 'Online Chat',
-      'connecting' => 'Online Chat',
-      'reconnecting' => 'Offline Chat - Saved locally',
-      'error' => 'Offline Chat - Saved locally',
-      'disconnected' => 'Offline Chat - Saved locally',
-      _ => 'Offline Chat - Saved locally',
+      'connecting' => 'Online Chat - connecting',
+      'reconnecting' => 'Online Chat - connecting',
+      'error' => 'Online Chat - waiting for connection',
+      'disconnected' => 'Online Chat - waiting for connection',
+      _ => 'Online Chat - waiting for connection',
     };
   }
 

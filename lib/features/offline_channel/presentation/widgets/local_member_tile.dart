@@ -6,10 +6,16 @@ import '../../data/models/offline_channel_member_model.dart';
 class LocalMemberTile extends StatelessWidget {
   const LocalMemberTile({
     required this.member,
+    this.currentUserId,
+    this.canRemove = false,
+    this.onRemove,
     super.key,
   });
 
   final OfflineChannelMemberModel member;
+  final String? currentUserId;
+  final bool canRemove;
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -26,36 +32,90 @@ class LocalMemberTile extends StatelessWidget {
           ),
         ),
       ),
-      title: Text(member.displayName),
+      title: Wrap(
+        spacing: 6,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(member.displayName),
+          if (member.userId == currentUserId)
+            const _RoleChip(label: 'You', color: AppColors.deepForest),
+          if (member.memberRole == 'owner')
+            const _RoleChip(label: 'Owner', color: AppColors.signalOrange),
+        ],
+      ),
       subtitle: Text(
         '${member.identityTypeLabel} - ${member.presenceDescription}'
         '${lastSeen == null ? '' : ' - $lastSeen'}',
       ),
-      trailing: Chip(
-        label: Text(member.presenceStatusLabel),
-        backgroundColor: member.presenceColor.withValues(alpha: 0.12),
-        labelStyle: TextStyle(
-          color: member.presenceColor,
-          fontWeight: FontWeight.w800,
-        ),
+      trailing: Wrap(
+        spacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Chip(
+            label: Text(member.presenceStatusLabel),
+            backgroundColor: member.presenceColor.withValues(alpha: 0.12),
+            labelStyle: TextStyle(
+              color: member.presenceColor,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          if (canRemove)
+            PopupMenuButton<String>(
+              tooltip: 'Member actions',
+              onSelected: (value) {
+                if (value == 'remove') onRemove?.call();
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: 'remove',
+                  child: Text('Remove member'),
+                ),
+              ],
+            ),
+        ],
       ),
     );
   }
+}
 
-  String? _lastSeenLabel(DateTime? lastSeenAt) {
-    if (lastSeenAt == null) return null;
-    final diff = DateTime.now().difference(lastSeenAt);
-    if (diff.inSeconds < 60) return 'last seen now';
-    if (diff.inMinutes < 60) return 'last seen ${diff.inMinutes} min ago';
-    if (diff.inHours < 24) return 'last seen ${diff.inHours} hr ago';
-    return 'last seen ${diff.inDays} d ago';
-  }
+class _RoleChip extends StatelessWidget {
+  const _RoleChip({required this.label, required this.color});
 
-  String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty || parts.first.isEmpty) return 'TL';
-    return parts.take(2).map((part) => part[0].toUpperCase()).join();
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
+      ),
+    );
   }
+}
+
+String? _lastSeenLabel(DateTime? lastSeenAt) {
+  if (lastSeenAt == null) return null;
+  final diff = DateTime.now().difference(lastSeenAt);
+  if (diff.inSeconds < 60) return 'last seen now';
+  if (diff.inMinutes < 60) return 'last seen ${diff.inMinutes} min ago';
+  if (diff.inHours < 24) return 'last seen ${diff.inHours} hr ago';
+  return 'last seen ${diff.inDays} d ago';
+}
+
+String _initials(String name) {
+  final parts = name.trim().split(RegExp(r'\s+'));
+  if (parts.isEmpty || parts.first.isEmpty) return 'TL';
+  return parts.take(2).map((part) => part[0].toUpperCase()).join();
 }
 
 extension OfflineMemberPresentation on OfflineChannelMemberModel {
@@ -91,10 +151,10 @@ extension OfflineMemberPresentation on OfflineChannelMemberModel {
 
   String get identityTypeLabel {
     return switch (identityType) {
-      'authenticated_cached' => 'Cached User',
-      'local_only' => 'Local User',
-      'guest' => 'Offline Guest',
-      _ => 'Offline Member',
+      'authenticated_cached' => 'Saved profile',
+      'local_only' => 'Local profile',
+      'guest' => 'Offline teammate',
+      _ => 'Offline teammate',
     };
   }
 }

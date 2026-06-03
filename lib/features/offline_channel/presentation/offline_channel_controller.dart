@@ -236,6 +236,29 @@ class OfflineChannelController
     }
   }
 
+  Future<void> removeMember({
+    required OfflineChannelModel channel,
+    required OfflineChannelMemberModel member,
+    required UserModel? user,
+  }) async {
+    state = const OfflineChannelMutationState(isLoading: true);
+    try {
+      final actor = user == null
+          ? CurrentUserActor.fromLocalIdentity(await _requireLocalIdentity())
+          : CurrentUserActor.fromUserModel(user);
+      await _repository.removeMember(
+        channel: channel,
+        member: member,
+        actor: actor,
+      );
+      state = OfflineChannelMutationState(
+        successMessage: '${member.displayName} removed from this channel.',
+      );
+    } catch (error) {
+      state = OfflineChannelMutationState(errorMessage: error.toString());
+    }
+  }
+
   Future<void> runPacketFilterTest({
     required OfflineChannelModel channel,
     required UserModel? user,

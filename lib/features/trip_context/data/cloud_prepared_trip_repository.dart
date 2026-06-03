@@ -4,6 +4,7 @@ import 'package:sqflite/sqflite.dart';
 import '../../../core/database/local_database.dart';
 import '../../../core/identity/local_identity_model.dart';
 import '../../../core/identity/local_identity_repository.dart';
+import '../../trip/data/trip_session_repository.dart';
 import 'cloud_prepared_trip_api.dart';
 import 'models/cloud_prepared_trip_metadata.dart';
 import 'trip_member_device_roster_repository.dart';
@@ -83,11 +84,14 @@ class CloudPreparedTripRepository {
       await txn.update(
         'trip_sessions',
         {'status': 'inactive', 'updated_at': now},
-        where: 'status = ? AND trip_id != ?',
-        whereArgs: ['active', metadata.trip.tripId],
+        where: 'status = ? AND mode IN (?, ?) AND trip_id != ?',
+        whereArgs: ['active', 'online', 'hybrid', metadata.trip.tripId],
       );
-      await txn.update('offline_channels', {'is_active': 0});
-      await txn.update('chat_rooms', {'is_active': 0});
+      await txn.update(
+        'chat_rooms',
+        {'is_active': 0, 'updated_at': now},
+        where: 'cloud_group_id IS NOT NULL',
+      );
 
       await txn.insert(
         'local_groups',
@@ -144,12 +148,12 @@ class CloudPreparedTripRepository {
           'channel_name': metadata.channel.channelName,
           'trip_id': metadata.trip.tripId,
           'description':
-              'Offline backup channel prepared from TrailLink cloud.',
+              'Offline support channel prepared from TrailLink cloud.',
           'created_by_user_id': metadata.trip.ownerUserId ?? localIdentityId,
           'created_by_name': metadata.group.groupName,
           'channel_key_hash': metadata.channel.channelKeyHash,
           'is_primary': 1,
-          'is_active': 1,
+          'is_active': 0,
           'channel_status': 'active',
           'created_at': metadata.channel.createdAt?.toIso8601String() ?? now,
           'updated_at': now,
@@ -229,8 +233,8 @@ class CloudPreparedTripRepository {
     });
 
     await _database.upsertSetting(
-      'active_offline_channel_id',
-      metadata.channel.channelId,
+      TripSessionRepository.activeOnlineTripSettingKey,
+      metadata.trip.tripId,
     );
     await _database.upsertSetting(
       'peer_validation_policy_${metadata.trip.tripId}',

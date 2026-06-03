@@ -4,7 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/mode/mode_controller.dart';
+import '../../../core/mode/mode_models.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../trip/data/trip_session_service.dart';
 import '../../trip_context/data/cloud_prepared_trip_repository.dart';
 import 'group_controller.dart';
 
@@ -38,11 +41,15 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         );
 
     ref.invalidate(myGroupsProvider);
+    ref.invalidate(modeScopedActiveTripProvider);
+    await ref
+        .read(modeControllerProvider.notifier)
+        .setManualCommunicationMode(ManualCommunicationMode.online);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Group code: ${metadata.group.groupCode}. Offline backup prepared.',
+          'Trip code: ${metadata.group.groupCode}. Nearby-phone support ready.',
         ),
       ),
     );
@@ -54,18 +61,18 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     final state = ref.watch(groupMutationControllerProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Group')),
+      appBar: AppBar(title: const Text('Create Online Trip')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
             Text(
-              'Start a trip group',
+              'Start an online trip',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
             const SizedBox(height: 8),
             Text(
-              'Create a private code for your hiking or camping team.',
+              'Create a private trip code for your hiking or camping team.',
               style: Theme.of(context).textTheme.bodyLarge,
             ),
             const SizedBox(height: 18),
@@ -79,12 +86,12 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                       TextFormField(
                         controller: _nameController,
                         decoration: const InputDecoration(
-                          labelText: 'Group name',
+                          labelText: 'Trip name',
                           prefixIcon: Icon(Icons.groups_rounded),
                         ),
                         validator: (value) =>
                             value == null || value.trim().isEmpty
-                                ? 'Group name is required'
+                                ? 'Trip name is required'
                                 : null,
                       ),
                       const SizedBox(height: 14),
@@ -106,7 +113,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                         ),
                       const SizedBox(height: 18),
                       PrimaryButton(
-                        label: 'Create Group',
+                        label: 'Create Trip',
                         icon: Icons.add_rounded,
                         isLoading: state.isLoading,
                         onPressed: _submit,
@@ -134,11 +141,11 @@ class GroupCodeCopyButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      tooltip: 'Copy group code',
+      tooltip: 'Copy trip code',
       onPressed: () {
         Clipboard.setData(ClipboardData(text: groupCode));
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Group code copied')),
+          const SnackBar(content: Text('Trip code copied')),
         );
       },
       icon: const Icon(Icons.copy_rounded),

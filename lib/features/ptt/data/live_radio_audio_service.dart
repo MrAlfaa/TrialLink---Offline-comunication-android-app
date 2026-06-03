@@ -38,6 +38,7 @@ class LiveRadioAudioService {
   static const numChannels = 1;
   static const chunkDurationMs = 200;
   static const jitterBufferDelayMs = 600;
+  static const incomingIdleTimeoutMs = 3000;
   static const _bytesPerSample = 2;
   static const _chunkBytes =
       sampleRate * numChannels * _bytesPerSample * chunkDurationMs ~/ 1000;
@@ -47,8 +48,11 @@ class LiveRadioAudioService {
   final _incoming = <String, _IncomingLiveStream>{};
   StreamSubscription<Uint8List>? _recordingSubscription;
   final List<int> _outgoingBuffer = [];
+  Timer? _incomingCleanupTimer;
+  Future<void> _feedQueue = Future<void>.value();
   bool _playerOpened = false;
   bool _playerStreaming = false;
+  bool _incomingPlaybackFailed = false;
   bool _recording = false;
   int _sequence = 0;
 
@@ -123,6 +127,7 @@ class LiveRadioAudioService {
       ),
     );
     await _ensurePlayerStreaming();
+    _startIncomingCleanupTimer();
     _incoming[streamId]?.startPump(_feedChunk);
   }
 
@@ -136,16 +141,24 @@ class LiveRadioAudioService {
     final stream = _incoming.remove(streamId);
     stream?.dispose();
     if (_incoming.isEmpty) {
+      _incomingCleanupTimer?.cancel();
+      _incomingCleanupTimer = null;
       await _stopPlayerStream();
     }
   }
 
   Future<void> stopAll() async {
     await stopOutgoingStream();
+    await stopIncomingStreams();
+  }
+
+  Future<void> stopIncomingStreams() async {
     for (final stream in _incoming.values) {
       stream.dispose();
     }
     _incoming.clear();
+    _incomingCleanupTimer?.cancel();
+    _incomingCleanupTimer = null;
     await _stopPlayerStream();
   }
 
@@ -164,25 +177,73 @@ class LiveRadioAudioService {
       _playerOpened = true;
     }
     if (_playerStreaming) return;
+    _incomingPlaybackFailed = false;
     await _player.startPlayerFromStream(
       codec: fs.Codec.pcm16,
       interleaved: true,
       numChannels: numChannels,
       sampleRate: sampleRate,
-      bufferSize: _chunkBytes * 2,
+      bufferSize: _chunkBytes * 6,
     );
     _playerStreaming = true;
   }
 
   Future<void> _feedChunk(Uint8List bytes) async {
-    if (!_playerStreaming) return;
-    await _player.feedUint8FromStream(bytes);
+    if (!_playerStreaming || _incomingPlaybackFailed) return;
+    if (bytes.length != _chunkBytes) return;
+    final chunk = Uint8List.fromList(bytes);
+    _feedQueue =
+        _feedQueue.then((_) => _safeFeedChunk(chunk)).catchError((_) {});
+    await _feedQueue;
+  }
+
+  Future<void> _safeFeedChunk(Uint8List bytes) async {
+    if (!_playerStreaming || _incomingPlaybackFailed) return;
+    try {
+      await _player.feedUint8FromStream(bytes);
+    } catch (_) {
+      _incomingPlaybackFailed = true;
+      _playerStreaming = false;
+      try {
+        await _player.stopPlayer();
+      } catch (_) {
+        // Native audio playback can fail on some devices; do not crash P2P.
+      }
+    }
   }
 
   Future<void> _stopPlayerStream() async {
     if (!_playerStreaming) return;
-    await _player.stopPlayer();
     _playerStreaming = false;
+    try {
+      await _feedQueue.timeout(
+        const Duration(milliseconds: 500),
+        onTimeout: () {},
+      );
+    } catch (_) {
+      // Playback is best-effort; stopping the stream must always complete.
+    }
+    await _player.stopPlayer();
+    _feedQueue = Future<void>.value();
+  }
+
+  void _startIncomingCleanupTimer() {
+    _incomingCleanupTimer ??= Timer.periodic(const Duration(seconds: 1), (_) {
+      final expired = _incoming.values
+          .where((stream) => stream.isIdleTimedOut)
+          .map((stream) => stream.streamId)
+          .toList();
+      if (expired.isEmpty) return;
+      for (final streamId in expired) {
+        final stream = _incoming.remove(streamId);
+        stream?.dispose();
+      }
+      if (_incoming.isEmpty) {
+        _incomingCleanupTimer?.cancel();
+        _incomingCleanupTimer = null;
+        unawaited(_stopPlayerStream());
+      }
+    });
   }
 }
 
@@ -199,18 +260,27 @@ class _IncomingLiveStream {
   final _buffer = SplayTreeMap<int, LiveAudioChunk>();
   Timer? _pumpTimer;
   int _nextSequence = 0;
+  DateTime _lastActivityAt = DateTime.now();
+  bool _feeding = false;
+
+  bool get isIdleTimedOut {
+    return DateTime.now().difference(_lastActivityAt).inMilliseconds >
+        LiveRadioAudioService.incomingIdleTimeoutMs;
+  }
 
   void add(LiveAudioChunk chunk) {
+    _lastActivityAt = DateTime.now();
     _buffer[chunk.sequence] = chunk;
   }
 
   void startPump(Future<void> Function(Uint8List bytes) feed) {
     _pumpTimer ??= Timer.periodic(const Duration(milliseconds: 80), (_) {
+      if (_feeding) return;
       final now = DateTime.now();
       final next = _buffer.remove(_nextSequence);
       if (next != null) {
         _nextSequence++;
-        unawaited(feed(next.bytes));
+        _feedOne(feed, next.bytes);
         return;
       }
       if (_buffer.isEmpty) return;
@@ -219,13 +289,26 @@ class _IncomingLiveStream {
       if (age >= LiveRadioAudioService.jitterBufferDelayMs) {
         _nextSequence = oldest.sequence + 1;
         _buffer.remove(oldest.sequence);
-        unawaited(feed(oldest.bytes));
+        _feedOne(feed, oldest.bytes);
       }
     });
+  }
+
+  void _feedOne(
+    Future<void> Function(Uint8List bytes) feed,
+    Uint8List bytes,
+  ) {
+    _feeding = true;
+    unawaited(
+      feed(bytes).whenComplete(() {
+        _feeding = false;
+      }),
+    );
   }
 
   void dispose() {
     _pumpTimer?.cancel();
     _buffer.clear();
+    _feeding = false;
   }
 }

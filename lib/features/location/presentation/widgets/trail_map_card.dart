@@ -381,7 +381,7 @@ class CoordinateLocationCard extends StatelessWidget {
   ) {
     return CoordinateLocationCard(
       title: 'My location',
-      subtitle: location.shareStatus,
+      subtitle: _locationShareStatusLabel(location.shareStatus),
       latitude: location.latitude,
       longitude: location.longitude,
       accuracy: location.accuracy,
@@ -471,4 +471,14 @@ class CoordinateLocationCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _locationShareStatusLabel(String status) {
+  return switch (status) {
+    'queued' || 'pending' => 'Waiting to share',
+    'shared' || 'synced' => 'Shared',
+    'failed' => 'Share failed',
+    'local_only' => 'Saved on this phone',
+    _ => status.replaceAll('_', ' '),
+  };
 }

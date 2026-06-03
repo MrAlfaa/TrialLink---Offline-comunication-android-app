@@ -93,7 +93,7 @@ class _TripManagementCard extends ConsumerWidget {
               [
                 'Mode: ${trip.mode}',
                 if ((trip.channelCode ?? '').isNotEmpty)
-                  'Channel: ${trip.channelCode}',
+                  'Trip code: ${trip.channelCode}',
               ].join('  |  '),
               style: Theme.of(context).textTheme.bodySmall,
             ),
@@ -108,27 +108,27 @@ class _TripManagementCard extends ConsumerWidget {
                   children: [
                     _StatusChip(
                       label: trip.cloudGroupId == null
-                          ? 'Cloud not linked'
-                          : 'Cloud ready',
+                          ? 'Internet not linked'
+                          : 'Internet trip',
                       active: trip.cloudGroupId != null,
                     ),
                     _StatusChip(
                       label: trip.offlineBackupReady
-                          ? 'Offline backup ready'
-                          : 'Offline backup missing',
+                          ? 'Nearby support ready'
+                          : 'Nearby support not ready',
                       active: trip.offlineBackupReady,
                     ),
                     if ((trip.channelCode ?? '').isNotEmpty)
                       _StatusChip(
-                        label: 'Channel code ${trip.channelCode}',
+                        label: 'Trip code ${trip.channelCode}',
                         active: true,
                       ),
                     _StatusChip(
-                      label: 'Members cached ${counts.$1}',
+                      label: 'Members saved ${counts.$1}',
                       active: counts.$1 > 0,
                     ),
                     _StatusChip(
-                      label: 'Devices cached ${counts.$2}',
+                      label: 'Phones saved ${counts.$2}',
                       active: counts.$2 > 0,
                     ),
                   ],
@@ -144,7 +144,7 @@ class _TripManagementCard extends ConsumerWidget {
                   return const LinearProgressIndicator(minHeight: 2);
                 }
                 if (channels.isEmpty) {
-                  return const Text('No offline channels linked yet.');
+                  return const Text('No trip code linked yet.');
                 }
                 return Column(
                   children: [
@@ -247,11 +247,6 @@ class _TripManagementCard extends ConsumerWidget {
                   icon: const Icon(Icons.archive_rounded),
                   label: const Text('Archive'),
                 ),
-                TextButton.icon(
-                  onPressed: () => _showCreateChannelDialog(context, ref, trip),
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('Add channel'),
-                ),
               ],
             ),
           ],
@@ -299,7 +294,7 @@ class _StatusChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        active ? 'Active' : label,
+        label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: active ? AppColors.success : AppColors.mutedText,
               fontWeight: FontWeight.w800,
@@ -331,62 +326,4 @@ Future<(int, int)> _rosterCounts(WidgetRef ref, String tripId) async {
   final members = await repository.countMembers(tripId);
   final devices = await repository.countDevices(tripId);
   return (members, devices);
-}
-
-Future<void> _showCreateChannelDialog(
-  BuildContext context,
-  WidgetRef ref,
-  TripSessionModel trip,
-) async {
-  final nameController = TextEditingController(text: '${trip.tripName} Backup');
-  final codeController = TextEditingController();
-  final service = ref.read(tripContextServiceProvider);
-  await showDialog<void>(
-    context: context,
-    builder: (context) {
-      return AlertDialog(
-        title: const Text('Create channel'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Channel name'),
-            ),
-            TextField(
-              controller: codeController,
-              decoration: const InputDecoration(
-                labelText: 'Custom code',
-                hintText: 'Optional',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              if (name.isEmpty) return;
-              await service.createChannelUnderTrip(
-                tripId: trip.tripId,
-                channelName: name,
-                customCode: codeController.text.trim().isEmpty
-                    ? null
-                    : codeController.text.trim(),
-              );
-              ref.invalidate(activeTripContextProvider);
-              if (context.mounted) Navigator.of(context).pop();
-            },
-            child: const Text('Create'),
-          ),
-        ],
-      );
-    },
-  );
-  nameController.dispose();
-  codeController.dispose();
 }

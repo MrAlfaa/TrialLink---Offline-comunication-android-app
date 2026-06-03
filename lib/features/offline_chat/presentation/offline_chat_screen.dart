@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/identity/auth_access_controller.dart';
 import '../../../core/identity/current_user_actor.dart';
+import '../../../core/notifications/trail_notification_service.dart';
 import '../../auth/data/models/user_model.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../chat/presentation/chat_mode_label.dart';
@@ -73,7 +74,15 @@ class _OfflineChatScreenState extends ConsumerState<OfflineChatScreen> {
   final _scrollController = ScrollController();
 
   @override
+  void initState() {
+    super.initState();
+    TrailNotificationService.instance.setActiveOfflineChannel(widget.channelId);
+  }
+
+  @override
   void dispose() {
+    TrailNotificationService.instance
+        .clearActiveOfflineChannel(widget.channelId);
     _scrollController.dispose();
     super.dispose();
   }

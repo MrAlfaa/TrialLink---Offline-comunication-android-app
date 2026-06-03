@@ -20,6 +20,10 @@ JWT_SECRET=replace_with_a_long_secure_random_secret
 JWT_EXPIRES_IN=7d
 ```
 
+`JWT_SECRET` may use a placeholder only for local development. In production,
+TrailLink refuses to start unless `JWT_SECRET` is set to a long, non-placeholder
+secret.
+
 ## Run
 
 ```powershell

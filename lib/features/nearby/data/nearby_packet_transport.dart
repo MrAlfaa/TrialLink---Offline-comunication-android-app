@@ -7,6 +7,10 @@ abstract class NearbyPacketTransport {
     required String activeChannelId,
     required String activeChannelCode,
     String? tripId,
+    String? tripName,
+    String? ownerLocalId,
+    String? ownerName,
+    String memberRole = 'member',
     String? publicUserId,
     String? appDeviceId,
     List<String> capabilities = const ['text'],
@@ -32,6 +36,10 @@ abstract class NearbyPacketTransport {
   });
 
   bool isConnected(String endpointId);
+
+  bool get isAdvertising;
+
+  bool get isDiscovering;
 
   List<NearbyPeerModel> connectedPeersForChannel(String channelCode);
 

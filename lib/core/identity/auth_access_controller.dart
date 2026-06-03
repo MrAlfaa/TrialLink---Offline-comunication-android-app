@@ -156,6 +156,36 @@ class AuthAccessController extends StateNotifier<AuthAccessStatus> {
     await _routeForLocalIdentity(identity);
   }
 
+  Future<bool> refreshFromBackendSession({
+    bool clearOnFailure = false,
+  }) async {
+    final identity = await _identityRepository.getCurrentIdentity();
+    if (identity == null) {
+      state = const AuthAccessStatus(
+        accessState: AuthAccessState.unauthenticated,
+        startupRoute: '/setup/identity',
+      );
+      return false;
+    }
+
+    final token = await _storage.readToken();
+    final backendReachable = await _reachabilityService.checkBackendReachable();
+    if (backendReachable && token != null && token.isNotEmpty) {
+      final user = await _authRepository.restoreSession(
+        clearOnFailure: clearOnFailure,
+      );
+      if (user != null) {
+        final savedIdentity =
+            await _identityRepository.saveAuthenticatedIdentity(user);
+        setAuthenticatedOnline(identity: savedIdentity, user: user);
+        return true;
+      }
+    }
+
+    await _routeForLocalIdentity(identity);
+    return false;
+  }
+
   void setAuthenticatedOnline({
     required LocalIdentityModel identity,
     required UserModel user,

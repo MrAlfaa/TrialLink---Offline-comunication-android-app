@@ -164,6 +164,130 @@ class OfflineChannelLocalDataSource {
     );
   }
 
+  Future<void> markMemberRemoved({
+    required String channelId,
+    required String userId,
+  }) async {
+    final db = await _database.database;
+    await db.update(
+      'offline_channel_members',
+      {
+        'status': 'removed',
+        'membership_status': 'removed',
+        'presence_status': 'disconnected',
+        'connection_status': 'disconnected',
+        'last_seen_at': DateTime.now().toIso8601String(),
+      },
+      where: 'channel_id = ? AND user_id = ?',
+      whereArgs: [channelId, userId],
+    );
+  }
+
+  Future<void> syncTripNameFromPeerHello({
+    required String channelCode,
+    required String tripName,
+    String? ownerLocalId,
+    String? ownerName,
+    String memberRole = 'member',
+  }) async {
+    final normalized = channelCode.toUpperCase();
+    final cleanName = tripName.trim();
+    if (cleanName.isEmpty) return;
+    final db = await _database.database;
+    final channelRows = await db.query(
+      'offline_channels',
+      where: 'channel_code = ?',
+      whereArgs: [normalized],
+      limit: 1,
+    );
+    if (channelRows.isEmpty) return;
+    final channel = OfflineChannelModel.fromDb(channelRows.first);
+    final now = DateTime.now().toIso8601String();
+    final cleanOwnerId = ownerLocalId?.trim();
+    final cleanOwnerName = ownerName?.trim();
+    await db.transaction((txn) async {
+      if (_isTemporaryName(channel.channelName, normalized)) {
+        await txn.update(
+          'offline_channels',
+          {'channel_name': cleanName, 'updated_at': now},
+          where: 'channel_id = ?',
+          whereArgs: [channel.channelId],
+        );
+      }
+      final tripRows = await txn.query(
+        'trip_sessions',
+        columns: ['trip_id', 'trip_name'],
+        where:
+            'offline_channel_id = ? OR active_channel_id = ? OR channel_code = ?',
+        whereArgs: [channel.channelId, channel.channelId, normalized],
+      );
+      for (final row in tripRows) {
+        final currentName = row['trip_name']?.toString() ?? '';
+        if (!_isTemporaryName(currentName, normalized)) continue;
+        await txn.update(
+          'trip_sessions',
+          {
+            'trip_name': cleanName,
+            'channel_name': cleanName,
+            'updated_at': now,
+          },
+          where: 'trip_id = ?',
+          whereArgs: [row['trip_id']],
+        );
+      }
+      if (cleanOwnerId != null &&
+          cleanOwnerId.isNotEmpty &&
+          (memberRole == 'owner' ||
+              channel.createdByUserId == 'unknown-owner' ||
+              channel.createdByUserId.isEmpty)) {
+        await txn.update(
+          'offline_channels',
+          {
+            'created_by_user_id': cleanOwnerId,
+            'created_by_name': cleanOwnerName?.isNotEmpty == true
+                ? cleanOwnerName
+                : 'Trip owner',
+            'updated_at': now,
+          },
+          where: 'channel_id = ?',
+          whereArgs: [channel.channelId],
+        );
+        await txn.delete(
+          'offline_channel_members',
+          where: 'channel_id = ? AND user_id = ?',
+          whereArgs: [channel.channelId, cleanOwnerId],
+        );
+        await txn.insert('offline_channel_members', {
+          'channel_id': channel.channelId,
+          'user_id': cleanOwnerId,
+          'display_name': cleanOwnerName?.isNotEmpty == true
+              ? cleanOwnerName
+              : 'Trip owner',
+          'member_role': 'owner',
+          'source': 'peer',
+          'status': 'active',
+          'membership_status': 'active',
+          'presence_status':
+              memberRole == 'owner' ? 'connected' : 'recently_seen',
+          'connection_status':
+              memberRole == 'owner' ? 'connected' : 'disconnected',
+          'endpoint_id': null,
+          'identity_type': 'local_only',
+          'joined_at': now,
+          'last_seen_at': now,
+        });
+      }
+    });
+  }
+
+  bool _isTemporaryName(String value, String channelCode) {
+    final normalized = value.trim().toUpperCase();
+    if (normalized.isEmpty || normalized == channelCode) return true;
+    return normalized.startsWith('OFFLINE CHANNEL ') ||
+        normalized.startsWith('CHANNEL ') ||
+        normalized.startsWith('JOIN ');
+  }
+
   Future<void> clearActiveChannel(String channelId) async {
     final db = await _database.database;
     await db.update(

@@ -108,7 +108,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       if (isOnlineOnlyRoute(location) &&
           !authAccess.accessState.canUseBackendFeatures) {
-        return '/account/link-offline-data';
+        final from = Uri.encodeComponent(state.uri.toString());
+        return '/account/link-offline-data?from=$from';
       }
 
       return null;
@@ -546,6 +547,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 pageBuilder: (context, state) => _slidePage(
                   state,
                   const FeatureControlsSettingsScreen(),
+                ),
+              ),
+              GoRoute(
+                path: 'notifications',
+                pageBuilder: (context, state) => _slidePage(
+                  state,
+                  const NotificationSettingsScreen(),
                 ),
               ),
               GoRoute(
