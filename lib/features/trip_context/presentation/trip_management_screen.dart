@@ -247,11 +247,68 @@ class _TripManagementCard extends ConsumerWidget {
                   icon: const Icon(Icons.archive_rounded),
                   label: const Text('Archive'),
                 ),
+                FutureBuilder<bool>(
+                  future: service.canDeleteTrip(trip.tripId),
+                  builder: (context, snapshot) {
+                    if (snapshot.data != true) {
+                      return const SizedBox.shrink();
+                    }
+                    return OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.danger,
+                      ),
+                      onPressed: () => _confirmDeleteTrip(context, ref, trip),
+                      icon: const Icon(Icons.delete_forever_rounded),
+                      label: const Text('Delete Trip'),
+                    );
+                  },
+                ),
               ],
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+Future<void> _confirmDeleteTrip(
+  BuildContext context,
+  WidgetRef ref,
+  TripSessionModel trip,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Delete trip?'),
+      content: Text(
+        'This will delete "${trip.tripName}", its saved channel, members, cached messages, voice notes, SOS, and location history from this phone. This cannot be undone.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return;
+  try {
+    await ref.read(tripContextServiceProvider).deleteTrip(trip.tripId);
+    ref.invalidate(activeTripContextProvider);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${trip.tripName} deleted.')),
+    );
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error.toString())),
     );
   }
 }

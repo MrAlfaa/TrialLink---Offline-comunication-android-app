@@ -7,6 +7,7 @@ import '../../../core/identity/local_identity_model.dart';
 import '../../../core/identity/local_identity_repository.dart';
 import '../../../core/mode/mode_controller.dart';
 import '../../../core/mode/mode_models.dart';
+import '../../groups/data/group_repository.dart';
 import '../../offline_channel/data/models/offline_channel_model.dart';
 import '../../offline_channel/data/offline_channel_repository.dart';
 import '../../p2p_session/data/p2p_session_service.dart';
@@ -20,6 +21,7 @@ final tripContextServiceProvider = Provider<TripContextService>((ref) {
     identityRepository: ref.read(localIdentityRepositoryProvider),
     tripRepository: ref.read(tripSessionRepositoryProvider),
     channelRepository: OfflineChannelRepository(),
+    groupRepository: GroupRepository(),
     p2pSessionService: ref.read(p2pSessionServiceProvider),
   );
 });
@@ -82,12 +84,14 @@ class TripContextService {
     LocalIdentityRepository? identityRepository,
     TripSessionRepository? tripRepository,
     OfflineChannelRepository? channelRepository,
+    GroupRepository? groupRepository,
     P2PSessionService? p2pSessionService,
     Uuid? uuid,
   })  : _database = database ?? LocalDatabase.instance,
         _identityRepository = identityRepository ?? LocalIdentityRepository(),
         _tripRepository = tripRepository ?? TripSessionRepository(),
         _channelRepository = channelRepository ?? OfflineChannelRepository(),
+        _groupRepository = groupRepository ?? GroupRepository(),
         _p2pSessionService = p2pSessionService,
         _uuid = uuid ?? const Uuid();
 
@@ -95,6 +99,7 @@ class TripContextService {
   final LocalIdentityRepository _identityRepository;
   final TripSessionRepository _tripRepository;
   final OfflineChannelRepository _channelRepository;
+  final GroupRepository _groupRepository;
   final P2PSessionService? _p2pSessionService;
   final Uuid _uuid;
 
@@ -424,6 +429,32 @@ class TripContextService {
     await _tripRepository.archiveTrip(tripId);
   }
 
+  Future<bool> canDeleteTrip(String tripId) async {
+    final trip = await _tripRepository.getTrip(tripId);
+    if (trip == null) return false;
+    return _currentUserOwnsTrip(trip);
+  }
+
+  Future<void> deleteTrip(String tripId) async {
+    final trip = await _tripRepository.getTrip(tripId);
+    if (trip == null) {
+      throw StateError('Trip not found.');
+    }
+    if (!await _currentUserOwnsTrip(trip)) {
+      throw StateError('Only the trip owner can delete this trip.');
+    }
+
+    final activeSession = await _p2pSessionService?.getActiveSession();
+    if (activeSession?.tripId == tripId) {
+      await _p2pSessionService?.stopActiveSession(reason: 'delete_trip');
+    }
+
+    if ((trip.cloudGroupId ?? '').isNotEmpty) {
+      await _groupRepository.archiveGroup(trip.cloudGroupId!);
+    }
+    await _tripRepository.deleteTripLocal(tripId);
+  }
+
   Future<void> _normalizeActiveTrips() async {
     final db = await _database.database;
     for (final modeSet in const [
@@ -462,6 +493,53 @@ class TripContextService {
       identity: identity,
       tripName: channel.channelName,
     );
+  }
+
+  Future<bool> _currentUserOwnsTrip(TripSessionModel trip) async {
+    final identity = await _identityRepository.getCurrentIdentity();
+    if (identity == null) return false;
+    final userIds = <String>{
+      identity.localUserId,
+      if ((identity.backendUserId ?? '').isNotEmpty) identity.backendUserId!,
+      if ((identity.cloudUserId ?? '').isNotEmpty) identity.cloudUserId!,
+      if ((identity.publicUserId ?? '').isNotEmpty) identity.publicUserId!,
+    };
+
+    if ((trip.cloudGroupId ?? '').isNotEmpty) {
+      final db = await _database.database;
+      final groupRows = await db.query(
+        'local_groups',
+        columns: ['member_role'],
+        where: 'group_id = ?',
+        whereArgs: [trip.cloudGroupId],
+        limit: 1,
+      );
+      final role = groupRows.isEmpty
+          ? null
+          : groupRows.first['member_role']?.toString();
+      if (role == 'owner') return true;
+      final ownerMemberRows = await db.query(
+        'local_group_members',
+        where:
+            'group_id = ? AND role = ? AND (${_inClause('user_id', userIds.length)} OR ${_inClause('local_user_id', userIds.length)})',
+        whereArgs: [trip.cloudGroupId, 'owner', ...userIds, ...userIds],
+        limit: 1,
+      );
+      if (ownerMemberRows.isNotEmpty) return true;
+    }
+
+    final channel = await _resolveChannelForTrip(trip);
+    if (channel == null) return false;
+    if (userIds.contains(channel.createdByUserId)) return true;
+    final db = await _database.database;
+    final ownerRows = await db.query(
+      'offline_channel_members',
+      where:
+          'channel_id = ? AND member_role = ? AND ${_inClause('user_id', userIds.length)}',
+      whereArgs: [channel.channelId, 'owner', ...userIds],
+      limit: 1,
+    );
+    return ownerRows.isNotEmpty;
   }
 
   Future<TripSessionModel?> _reconcileGloballyActiveChannel(
@@ -666,6 +744,10 @@ class TripContextService {
       limit: 1,
     );
     return rows.isEmpty ? null : OfflineChannelModel.fromDb(rows.first);
+  }
+
+  String _inClause(String column, int count) {
+    return '$column IN (${List.filled(count, '?').join(', ')})';
   }
 
   Future<ChatRoomModel?> _resolveChatForTrip(

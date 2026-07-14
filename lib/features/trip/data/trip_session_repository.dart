@@ -371,6 +371,375 @@ class TripSessionRepository {
     await _updateStatus(tripId, 'archived');
   }
 
+  Future<void> deleteTripLocal(String tripId) async {
+    final trip = await getTrip(tripId);
+    if (trip == null) {
+      throw StateError('Trip not found.');
+    }
+
+    final db = await _database.database;
+    final channelIds = <String>{
+      if ((trip.offlineChannelId ?? '').isNotEmpty) trip.offlineChannelId!,
+      if ((trip.activeChannelId ?? '').isNotEmpty) trip.activeChannelId!,
+      if ((trip.primaryChannelId ?? '').isNotEmpty) trip.primaryChannelId!,
+    };
+    final channelCodes = <String>{
+      if ((trip.channelCode ?? '').isNotEmpty)
+        normalizeChannelCode(trip.channelCode!),
+    };
+
+    final linkedRows = await db.query(
+      'offline_channels',
+      columns: ['channel_id', 'channel_code'],
+      where: 'trip_id = ?',
+      whereArgs: [tripId],
+    );
+    for (final row in linkedRows) {
+      final channelId = row['channel_id']?.toString();
+      final channelCode = row['channel_code']?.toString();
+      if (channelId != null && channelId.isNotEmpty) channelIds.add(channelId);
+      if (channelCode != null && channelCode.isNotEmpty) {
+        channelCodes.add(channelCode);
+      }
+    }
+
+    final chatRows = await db.query(
+      'chat_rooms',
+      columns: ['chat_id'],
+      where: 'trip_id = ?',
+      whereArgs: [tripId],
+    );
+    final chatIds = chatRows
+        .map((row) => row['chat_id']?.toString())
+        .whereType<String>()
+        .where((value) => value.isNotEmpty)
+        .toSet();
+
+    final emergencyRows = await db.query(
+      'emergency_events',
+      columns: ['local_event_id'],
+      where: _contextWhere(
+        tripId: null,
+        groupId: trip.cloudGroupId,
+        channelIds: channelIds,
+        channelCodes: channelCodes,
+        offlineChannelColumn: 'offline_channel_id',
+        groupColumn: 'group_id',
+        channelCodeColumn: 'channel_code',
+      ),
+      whereArgs: _contextWhereArgs(
+        tripId: null,
+        groupId: trip.cloudGroupId,
+        channelIds: channelIds,
+        channelCodes: channelCodes,
+      ),
+    );
+    final emergencyIds = emergencyRows
+        .map((row) => row['local_event_id']?.toString())
+        .whereType<String>()
+        .where((value) => value.isNotEmpty)
+        .toSet();
+
+    await db.transaction((txn) async {
+      await _deleteContextRows(
+        txn,
+        table: 'p2p_connected_peers',
+        tripId: tripId,
+        groupId: null,
+        channelIds: channelIds,
+        channelCodes: channelCodes,
+        tripColumn: 'trip_id',
+        channelColumn: 'channel_id',
+        channelCodeColumn: 'channel_code',
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'p2p_connection_sessions',
+        tripId: tripId,
+        groupId: null,
+        channelIds: channelIds,
+        channelCodes: channelCodes,
+        tripColumn: 'trip_id',
+        channelColumn: 'channel_id',
+        channelCodeColumn: 'channel_code',
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'cloud_trip_member_devices',
+        tripId: tripId,
+        groupId: trip.cloudGroupId,
+        channelIds: channelIds,
+        channelCodes: const {},
+        tripColumn: 'trip_id',
+        groupColumn: 'cloud_group_id',
+        channelColumn: 'channel_id',
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'offline_channel_members',
+        tripId: null,
+        groupId: null,
+        channelIds: channelIds,
+        channelCodes: const {},
+        channelColumn: 'channel_id',
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'offline_channel_packets',
+        tripId: null,
+        groupId: null,
+        channelIds: channelIds,
+        channelCodes: const {},
+        channelColumn: 'channel_id',
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'offline_messages',
+        tripId: null,
+        groupId: null,
+        channelIds: channelIds,
+        channelCodes: channelCodes,
+        chatIds: chatIds,
+        channelColumn: 'channel_id',
+        channelCodeColumn: 'channel_code',
+        chatColumn: 'chat_id',
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'offline_packet_queue',
+        tripId: null,
+        groupId: null,
+        channelIds: channelIds,
+        channelCodes: channelCodes,
+        chatIds: chatIds,
+        channelColumn: 'channel_id',
+        channelCodeColumn: 'channel_code',
+        chatColumn: 'chat_id',
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'processed_offline_packets',
+        tripId: null,
+        groupId: null,
+        channelIds: channelIds,
+        channelCodes: channelCodes,
+        chatIds: chatIds,
+        channelColumn: 'channel_id',
+        channelCodeColumn: 'channel_code',
+        chatColumn: 'chat_id',
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'offline_acks',
+        tripId: null,
+        groupId: null,
+        channelIds: channelIds,
+        channelCodes: const {},
+        chatIds: chatIds,
+        channelColumn: 'channel_id',
+        chatColumn: 'chat_id',
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'emergency_events',
+        tripId: null,
+        groupId: trip.cloudGroupId,
+        channelIds: channelIds,
+        channelCodes: channelCodes,
+        groupColumn: 'group_id',
+        channelColumn: 'offline_channel_id',
+        channelCodeColumn: 'channel_code',
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'emergency_packet_queue',
+        tripId: null,
+        groupId: trip.cloudGroupId,
+        channelIds: channelIds,
+        channelCodes: channelCodes,
+        groupColumn: 'group_id',
+        channelColumn: 'offline_channel_id',
+        channelCodeColumn: 'channel_code',
+      );
+      await _deleteWhereIn(
+        txn,
+        table: 'emergency_acks',
+        column: 'local_event_id',
+        values: emergencyIds,
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'location_updates',
+        tripId: null,
+        groupId: trip.cloudGroupId,
+        channelIds: channelIds,
+        channelCodes: channelCodes,
+        groupColumn: 'group_id',
+        channelColumn: 'offline_channel_id',
+        channelCodeColumn: 'channel_code',
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'teammate_locations',
+        tripId: null,
+        groupId: trip.cloudGroupId,
+        channelIds: channelIds,
+        channelCodes: channelCodes,
+        groupColumn: 'group_id',
+        channelColumn: 'offline_channel_id',
+        channelCodeColumn: 'channel_code',
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'location_packet_queue',
+        tripId: null,
+        groupId: null,
+        channelIds: channelIds,
+        channelCodes: channelCodes,
+        channelColumn: 'offline_channel_id',
+        channelCodeColumn: 'channel_code',
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'voice_notes',
+        tripId: null,
+        groupId: trip.cloudGroupId,
+        channelIds: channelIds,
+        channelCodes: channelCodes,
+        groupColumn: 'group_id',
+        channelColumn: 'offline_channel_id',
+        channelCodeColumn: 'channel_code',
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'voice_packet_queue',
+        tripId: null,
+        groupId: null,
+        channelIds: channelIds,
+        channelCodes: channelCodes,
+        channelColumn: 'offline_channel_id',
+        channelCodeColumn: 'channel_code',
+      );
+      await _deleteWhereIn(
+        txn,
+        table: 'live_radio_sessions',
+        column: 'offline_channel_id',
+        values: channelIds,
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'ptt_floor_events',
+        tripId: null,
+        groupId: trip.cloudGroupId,
+        channelIds: channelIds,
+        channelCodes: const {},
+        groupColumn: 'context_id',
+        channelColumn: 'context_id',
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'local_messages',
+        tripId: tripId,
+        groupId: trip.cloudGroupId,
+        channelIds: channelIds,
+        channelCodes: const {},
+        chatIds: chatIds,
+        tripColumn: 'trip_id',
+        groupColumn: 'group_id',
+        channelColumn: 'channel_id',
+        chatColumn: 'chat_id',
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'message_queue',
+        tripId: tripId,
+        groupId: trip.cloudGroupId,
+        channelIds: channelIds,
+        channelCodes: const {},
+        chatIds: chatIds,
+        tripColumn: 'trip_id',
+        groupColumn: 'group_id',
+        channelColumn: 'channel_id',
+        chatColumn: 'chat_id',
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'bridged_messages',
+        tripId: tripId,
+        groupId: trip.cloudGroupId,
+        channelIds: channelIds,
+        channelCodes: channelCodes,
+        tripColumn: 'trip_id',
+        groupColumn: 'group_id',
+        channelColumn: 'channel_id',
+        channelCodeColumn: 'channel_code',
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'nearby_peers',
+        tripId: tripId,
+        groupId: null,
+        channelIds: const {},
+        channelCodes: channelCodes,
+        tripColumn: 'trip_id',
+        channelCodeColumn: 'active_channel_code',
+      );
+      await _deleteWhereIn(
+        txn,
+        table: 'local_group_members',
+        column: 'group_id',
+        values: {if ((trip.cloudGroupId ?? '').isNotEmpty) trip.cloudGroupId!},
+      );
+      await _deleteWhereIn(
+        txn,
+        table: 'local_groups',
+        column: 'group_id',
+        values: {if ((trip.cloudGroupId ?? '').isNotEmpty) trip.cloudGroupId!},
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'chat_rooms',
+        tripId: tripId,
+        groupId: trip.cloudGroupId,
+        channelIds: channelIds,
+        channelCodes: const {},
+        tripColumn: 'trip_id',
+        groupColumn: 'cloud_group_id',
+        channelColumn: 'channel_id',
+      );
+      await _deleteContextRows(
+        txn,
+        table: 'offline_channels',
+        tripId: tripId,
+        groupId: null,
+        channelIds: channelIds,
+        channelCodes: channelCodes,
+        tripColumn: 'trip_id',
+        channelColumn: 'channel_id',
+        channelCodeColumn: 'channel_code',
+      );
+      await txn.delete(
+        'trip_sessions',
+        where: 'trip_id = ?',
+        whereArgs: [tripId],
+      );
+    });
+
+    final activeOnline = await _database.readSetting(activeOnlineTripSettingKey);
+    if (activeOnline == tripId) {
+      await _database.upsertSetting(activeOnlineTripSettingKey, '');
+    }
+    final activeOffline =
+        await _database.readSetting(activeOfflineTripSettingKey);
+    if (activeOffline == tripId) {
+      await _database.upsertSetting(activeOfflineTripSettingKey, '');
+    }
+    final activeChannel = await _database.readSetting('active_offline_channel_id');
+    if (activeChannel != null && channelIds.contains(activeChannel)) {
+      await _database.upsertSetting('active_offline_channel_id', '');
+    }
+  }
+
   Future<void> updateTripChannel({
     required String tripId,
     required String offlineChannelId,
@@ -628,6 +997,101 @@ class TripSessionRepository {
       },
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
+  }
+
+  Future<void> _deleteContextRows(
+    Transaction txn, {
+    required String table,
+    required String? tripId,
+    required String? groupId,
+    required Set<String> channelIds,
+    required Set<String> channelCodes,
+    Set<String> chatIds = const {},
+    String? tripColumn,
+    String? groupColumn,
+    String? channelColumn,
+    String? channelCodeColumn,
+    String? chatColumn,
+  }) async {
+    final clauses = <String>[];
+    final args = <Object?>[];
+    void addEquals(String? column, String? value) {
+      if (column == null || value == null || value.isEmpty) return;
+      clauses.add('$column = ?');
+      args.add(value);
+    }
+
+    void addIn(String? column, Set<String> values) {
+      if (column == null || values.isEmpty) return;
+      clauses.add(_inClause(column, values.length));
+      args.addAll(values);
+    }
+
+    addEquals(tripColumn, tripId);
+    addEquals(groupColumn, groupId);
+    addIn(channelColumn, channelIds);
+    addIn(channelCodeColumn, channelCodes);
+    addIn(chatColumn, chatIds);
+    if (clauses.isEmpty) return;
+    await txn.delete(table, where: clauses.join(' OR '), whereArgs: args);
+  }
+
+  Future<void> _deleteWhereIn(
+    Transaction txn, {
+    required String table,
+    required String column,
+    required Set<String> values,
+  }) async {
+    if (values.isEmpty) return;
+    await txn.delete(
+      table,
+      where: _inClause(column, values.length),
+      whereArgs: values.toList(),
+    );
+  }
+
+  String _contextWhere({
+    required String? tripId,
+    required String? groupId,
+    required Set<String> channelIds,
+    required Set<String> channelCodes,
+    String? tripColumn,
+    String? groupColumn,
+    String? offlineChannelColumn,
+    String? channelCodeColumn,
+  }) {
+    final clauses = <String>[];
+    if (tripColumn != null && tripId != null && tripId.isNotEmpty) {
+      clauses.add('$tripColumn = ?');
+    }
+    if (groupColumn != null && groupId != null && groupId.isNotEmpty) {
+      clauses.add('$groupColumn = ?');
+    }
+    if (offlineChannelColumn != null && channelIds.isNotEmpty) {
+      clauses.add(_inClause(offlineChannelColumn, channelIds.length));
+    }
+    if (channelCodeColumn != null && channelCodes.isNotEmpty) {
+      clauses.add(_inClause(channelCodeColumn, channelCodes.length));
+    }
+    return clauses.isEmpty ? '1 = 0' : clauses.join(' OR ');
+  }
+
+  List<Object?> _contextWhereArgs({
+    required String? tripId,
+    required String? groupId,
+    required Set<String> channelIds,
+    required Set<String> channelCodes,
+  }) {
+    return [
+      if (tripId != null && tripId.isNotEmpty) tripId,
+      if (groupId != null && groupId.isNotEmpty) groupId,
+      ...channelIds,
+      ...channelCodes,
+    ];
+  }
+
+  String _inClause(String column, int count) {
+    return '$column IN (${List.filled(count, '?').join(', ')})';
   }
 
   void _validateTripName(String value) {
