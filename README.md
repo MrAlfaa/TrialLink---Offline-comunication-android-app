@@ -34,14 +34,15 @@ Backend:
 ```text
 TrailLink-Android Flutter App/
   lib/                     Flutter app source
-  assets/branding/          App branding assets
+  assets/                  App branding and bundled assets
   android/                  Android project
   backend/                  Node.js API and Socket.IO backend
-  docs/                     Product, QA, and system documents
-  test/                     Flutter regression tests
   .env.example              Flutter environment template
   pubspec.yaml              Flutter package config
 ```
+
+The `deploy` branch contains runtime source only. QA evidence, test sources,
+generated uploads, build output, and machine-specific files are excluded.
 
 ## Prerequisites
 
@@ -49,7 +50,7 @@ Install these before running the project:
 
 - Flutter SDK
 - Android Studio or Android SDK command-line tools
-- Java/JDK supported by your Android Gradle setup
+- JDK 17 (Android Studio's bundled JDK is recommended)
 - Node.js LTS
 - Git
 - MongoDB Atlas connection string or a reachable MongoDB instance
@@ -62,237 +63,226 @@ flutter doctor
 flutter devices
 ```
 
-## Clone And Install
+## Clone And Initial Setup
+
+Clone the deployment branch.
+
+Git Bash:
 
 ```bash
-git clone <github-repository-url>
-cd "TrailLink-Android Flutter App"
+git clone -b deploy https://github.com/MrAlfaa/TrialLink---Offline-comunication-android-app.git
+cd TrialLink---Offline-comunication-android-app
+cp .env.example .env
+cp backend/.env.example backend/.env
 flutter pub get
-```
-
-Install backend dependencies:
-
-```bash
 cd backend
 npm install
 cd ..
 ```
 
-## Environment Files
+PowerShell:
 
-Create Flutter `.env` in the project root:
-
-```env
-API_BASE_URL=http://10.0.2.2:5001/api
-APP_ENV=development
+```powershell
+git clone -b deploy https://github.com/MrAlfaa/TrialLink---Offline-comunication-android-app.git
+Set-Location "TrialLink---Offline-comunication-android-app"
+Copy-Item .env.example .env
+Copy-Item backend/.env.example backend/.env
+flutter pub get
+Set-Location backend
+npm install
+Set-Location ..
 ```
 
-Create backend `.env` in `backend/`:
+## Configure Environment Files
+
+Edit `backend/.env` and provide a real MongoDB connection and a long random JWT secret:
 
 ```env
 PORT=5001
 NODE_ENV=development
 MONGO_URI=your_mongodb_connection_string
-JWT_SECRET=replace_with_a_secure_secret
+JWT_SECRET=replace_with_a_long_random_secret
 JWT_EXPIRES_IN=7d
 ```
 
-Do not commit real `.env` files.
+The root `.env` depends on the Android target.
 
-## Git Bash Runbook
-
-Most local development can be run from Git Bash on Windows. Use two terminals:
-
-- **Terminal 1** keeps the backend running.
-- **Terminal 2** builds, installs, and launches the Flutter app.
-
-### 1. Start The Backend
-
-From the repository root:
-
-```bash
-cd backend
-npm install
-npm run dev
-```
-
-Keep this terminal open. The backend runs on:
-
-```text
-http://127.0.0.1:5001/api
-```
-
-Health check from another Git Bash terminal:
-
-```bash
-curl http://127.0.0.1:5001/api/health
-```
-
-The backend must stay running when testing Online Trip features.
-
-### 2. Run On Android Emulator
-
-Use this Flutter `.env`:
+For an Android Studio emulator:
 
 ```env
 API_BASE_URL=http://10.0.2.2:5001/api
 APP_ENV=development
 ```
 
-Then run:
-
-```bash
-flutter pub get
-flutter run -d <emulator_id>
-```
-
-Example:
-
-```bash
-flutter devices
-flutter run -d emulator-5554
-```
-
-### 3. Run On Physical Android Phones With USB Reverse
-
-This is the recommended setup for local backend testing on real phones.
-
-Use this Flutter `.env`:
+For a USB-connected physical Android phone using `adb reverse`:
 
 ```env
 API_BASE_URL=http://127.0.0.1:5000/api
 APP_ENV=development
 ```
 
-Confirm connected devices:
+Never commit real `.env` files, MongoDB credentials, or JWT secrets.
+
+## Start The Backend
+
+Keep the backend running in its own terminal while using Online Trip features.
+
+Git Bash:
+
+```bash
+cd backend
+npm run dev
+```
+
+In a second Git Bash terminal, verify it:
+
+```bash
+curl http://127.0.0.1:5001/api/health
+```
+
+PowerShell:
+
+```powershell
+Set-Location backend
+npm run dev
+```
+
+In a second PowerShell terminal, verify it:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:5001/api/health
+```
+
+The backend URL on the laptop is `http://127.0.0.1:5001/api`.
+
+## Run With Android Studio Emulator
+
+1. Open Android Studio and choose **Open**.
+2. Select the cloned repository root, not only the `android/` folder.
+3. Confirm the Flutter and Dart plugins are installed.
+4. Open **Tools > Device Manager**, create an Android virtual device, and start it.
+5. Set the root `.env` to use `http://10.0.2.2:5001/api`.
+6. Start the backend in Android Studio's Terminal or a separate terminal.
+7. Select the emulator in the device selector and run `lib/main.dart`.
+
+The same emulator can be launched from either shell.
+
+Git Bash:
+
+```bash
+flutter devices
+flutter run -d emulator-5554
+```
+
+PowerShell:
+
+```powershell
+flutter devices
+flutter run -d emulator-5554
+```
+
+Replace `emulator-5554` with the ID shown by `flutter devices`.
+
+## Run On A Physical Android Phone With USB Debugging
+
+On the phone:
+
+1. Open **Settings > About phone** and tap **Build number** seven times.
+2. Open **Developer options** and enable **USB debugging**.
+3. Connect the phone with a data-capable USB cable.
+4. Accept the **Allow USB debugging** prompt on the phone.
+5. Some Xiaomi devices also require **Install via USB** to be enabled.
+
+Set the root `.env` to use `http://127.0.0.1:5000/api`, then confirm the phone ID.
+
+Git Bash:
 
 ```bash
 adb devices
 flutter devices
-```
-
-Current two-device development IDs:
-
-```text
-Xiaomi  : HAF6ZXGI5TINKJCA
-Samsung : R58R85Q2HWH
-```
-
-Start backend on laptop port `5001`, then reverse each phone's port `5000` to laptop port `5001`:
-
-```bash
-adb -s HAF6ZXGI5TINKJCA reverse tcp:5000 tcp:5001
-adb -s R58R85Q2HWH reverse tcp:5000 tcp:5001
-adb -s HAF6ZXGI5TINKJCA reverse --list
-adb -s R58R85Q2HWH reverse --list
-```
-
-Install dependencies and run source checks:
-
-```bash
-flutter pub get
-flutter analyze
-flutter test
-```
-
-Build and install the same APK on both devices:
-
-```bash
-flutter build apk --debug
-adb -s HAF6ZXGI5TINKJCA install -r -g build/app/outputs/flutter-apk/app-debug.apk
-adb -s R58R85Q2HWH install -r -g build/app/outputs/flutter-apk/app-debug.apk
-```
-
-Launch both installed apps:
-
-```bash
-adb -s HAF6ZXGI5TINKJCA shell am start -n com.example.traillink/.MainActivity
-adb -s R58R85Q2HWH shell am start -n com.example.traillink/.MainActivity
-```
-
-Run directly on one device instead of installing the APK manually:
-
-```bash
-flutter run -d HAF6ZXGI5TINKJCA
-```
-
-Run on the second phone from another terminal:
-
-```bash
-flutter run -d R58R85Q2HWH
-```
-
-Clear app data for a fresh test:
-
-```bash
-adb -s HAF6ZXGI5TINKJCA shell pm clear com.example.traillink
-adb -s R58R85Q2HWH shell pm clear com.example.traillink
-```
-
-Capture logs during two-phone testing:
-
-```bash
-adb -s HAF6ZXGI5TINKJCA logcat -c
-adb -s R58R85Q2HWH logcat -c
-adb -s HAF6ZXGI5TINKJCA logcat | grep TrailLink
-adb -s R58R85Q2HWH logcat | grep TrailLink
-```
-
-### 4. Run On A Physical Android Phone Over Wi-Fi
-
-Use this Flutter `.env`, replacing the IP with your laptop LAN IP:
-
-```env
-API_BASE_URL=http://192.168.1.20:5001/api
-APP_ENV=development
-```
-
-Then run:
-
-```bash
+adb -s <device_id> reverse tcp:5000 tcp:5001
+adb -s <device_id> reverse --list
 flutter run -d <device_id>
 ```
 
-The phone and laptop must be on the same network, and Windows Firewall must allow the backend port.
+PowerShell:
 
-## Useful Commands
-
-Analyze and test:
-
-```bash
-flutter analyze
-flutter test
+```powershell
+adb devices
+flutter devices
+adb -s <device_id> reverse tcp:5000 tcp:5001
+adb -s <device_id> reverse --list
+flutter run -d <device_id>
 ```
 
-Build debug APK:
+`adb reverse` maps phone port `5000` to backend port `5001` on the laptop. Run it again after reconnecting the USB cable or restarting ADB.
+
+## Run On Two Physical Android Phones
+
+Apply port reverse to each phone, build one APK, and install the same APK on both devices.
+
+Git Bash:
 
 ```bash
+adb devices
+adb -s <device_a_id> reverse tcp:5000 tcp:5001
+adb -s <device_b_id> reverse tcp:5000 tcp:5001
 flutter build apk --debug
+adb -s <device_a_id> install -r -g build/app/outputs/flutter-apk/app-debug.apk
+adb -s <device_b_id> install -r -g build/app/outputs/flutter-apk/app-debug.apk
+adb -s <device_a_id> shell am start -n com.example.traillink/.MainActivity
+adb -s <device_b_id> shell am start -n com.example.traillink/.MainActivity
 ```
 
-Clear app data on a device:
+PowerShell:
+
+```powershell
+adb devices
+adb -s <device_a_id> reverse tcp:5000 tcp:5001
+adb -s <device_b_id> reverse tcp:5000 tcp:5001
+flutter build apk --debug
+adb -s <device_a_id> install -r -g build\app\outputs\flutter-apk\app-debug.apk
+adb -s <device_b_id> install -r -g build\app\outputs\flutter-apk\app-debug.apk
+adb -s <device_a_id> shell am start -n com.example.traillink/.MainActivity
+adb -s <device_b_id> shell am start -n com.example.traillink/.MainActivity
+```
+
+For a fresh setup, clear data before launching:
 
 ```bash
-adb -s <device_id> shell pm clear com.example.traillink
+adb -s <device_a_id> shell pm clear com.example.traillink
+adb -s <device_b_id> shell pm clear com.example.traillink
 ```
 
-Install debug APK:
+## Build And Diagnostic Commands
+
+Git Bash:
 
 ```bash
-adb -s <device_id> install -r -g build/app/outputs/flutter-apk/app-debug.apk
+flutter doctor -v
+flutter devices
+flutter analyze
+flutter build apk --debug
+adb -s <device_id> logcat | grep TrailLink
 ```
 
-Backend smoke checks:
+PowerShell:
 
-```bash
-cd backend
-npm run test:phase02
-npm run test:phase03
-npm run test:phase09
-npm run test:phase10
-npm run test:phase12
-npm run test:phase14j
+```powershell
+flutter doctor -v
+flutter devices
+flutter analyze
+flutter build apk --debug
+adb -s <device_id> logcat | Select-String TrailLink
 ```
+
+Debug APK output:
+
+```text
+build/app/outputs/flutter-apk/app-debug.apk
+```
+
+If Gradle reports an invalid `JAVA_HOME`, set it to Android Studio's bundled JDK path or an installed JDK 17. If Flutter reports duplicate asset files, run `flutter clean`, `flutter pub get`, and build again.
 
 ## App Flow
 
@@ -487,11 +477,3 @@ Settings include:
 - SOS preferences
 - App lock and PIN behavior
 - Location and safety preferences
-
-## Client System Document
-
-See the detailed system guide:
-
-```text
-docs/TRAILLINK_MVP_SYSTEM_DOCUMENTATION.md
-```
