@@ -219,39 +219,140 @@ flutter run -d <device_id>
 
 ## Run On Two Physical Android Phones
 
-Apply port reverse to each phone, build one APK, and install the same APK on both devices.
+Use two Git Bash terminals. Terminal 1 runs the backend continuously. Terminal 2 runs Flutter and ADB commands from the project root.
+
+Before starting, replace the example project path and phone IDs with values from your computer. Do not type the `<` or `>` characters shown in placeholders.
+
+Example Git Bash project paths:
+
+```text
+/d/Projects/TrialLink---Offline-comunication-android-app
+/e/PROJECTS/Out Source Project/TrailLink-Android Flutter App
+```
+
+### Git Bash Terminal 1 - Start The Backend
+
+Open Git Bash and run:
+
+```bash
+TRAILLINK_DIR="/d/Projects/TrialLink---Offline-comunication-android-app"
+cd "$TRAILLINK_DIR/backend"
+npm install
+npm run dev
+```
+
+Leave Terminal 1 open. The backend must continue running on laptop port `5001`.
+
+Open a second Git Bash terminal and confirm backend health:
+
+```bash
+curl http://127.0.0.1:5001/api/health
+```
+
+### Git Bash Terminal 2 - Build And Run Both Phones
+
+The following commands must run from the Flutter project root, where `pubspec.yaml` is located:
+
+```bash
+TRAILLINK_DIR="/d/Projects/TrialLink---Offline-comunication-android-app"
+cd "$TRAILLINK_DIR"
+
+adb devices
+flutter devices
+```
+
+Copy the two serial numbers shown under `List of devices attached`. Assign them once so later commands are easier to read:
+
+```bash
+DEVICE_A="your_first_phone_serial"
+DEVICE_B="your_second_phone_serial"
+
+adb -s "$DEVICE_A" reverse tcp:5000 tcp:5001
+adb -s "$DEVICE_B" reverse tcp:5000 tcp:5001
+adb -s "$DEVICE_A" reverse --list
+adb -s "$DEVICE_B" reverse --list
+
+flutter pub get
+flutter analyze
+flutter build apk --debug
+
+APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"
+adb -s "$DEVICE_A" install -r -g "$APK_PATH"
+adb -s "$DEVICE_B" install -r -g "$APK_PATH"
+
+adb -s "$DEVICE_A" shell am start -n com.example.traillink/.MainActivity
+adb -s "$DEVICE_B" shell am start -n com.example.traillink/.MainActivity
+```
+
+For this USB workflow, the root `.env` must contain:
+
+```env
+API_BASE_URL=http://127.0.0.1:5000/api
+APP_ENV=development
+```
+
+### PowerShell Terminal 1 - Start The Backend
+
+Replace the example path with the cloned repository path:
+
+```powershell
+$TrailLinkDir = "D:\Projects\TrialLink---Offline-comunication-android-app"
+Set-Location "$TrailLinkDir\backend"
+npm install
+npm run dev
+```
+
+Leave Terminal 1 open. In another PowerShell terminal, verify backend health:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:5001/api/health
+```
+
+### PowerShell Terminal 2 - Build And Run Both Phones
+
+```powershell
+$TrailLinkDir = "D:\Projects\TrialLink---Offline-comunication-android-app"
+Set-Location $TrailLinkDir
+
+adb devices
+flutter devices
+
+$DeviceA = "your_first_phone_serial"
+$DeviceB = "your_second_phone_serial"
+
+adb -s $DeviceA reverse tcp:5000 tcp:5001
+adb -s $DeviceB reverse tcp:5000 tcp:5001
+adb -s $DeviceA reverse --list
+adb -s $DeviceB reverse --list
+
+flutter pub get
+flutter analyze
+flutter build apk --debug
+
+$ApkPath = "build\app\outputs\flutter-apk\app-debug.apk"
+adb -s $DeviceA install -r -g $ApkPath
+adb -s $DeviceB install -r -g $ApkPath
+
+adb -s $DeviceA shell am start -n com.example.traillink/.MainActivity
+adb -s $DeviceB shell am start -n com.example.traillink/.MainActivity
+```
+
+### Optional Fresh Installation
+
+Clearing app data deletes the local profile, trips, chats, and settings on that phone. Use it only when a fresh setup is required.
 
 Git Bash:
 
 ```bash
-adb devices
-adb -s <device_a_id> reverse tcp:5000 tcp:5001
-adb -s <device_b_id> reverse tcp:5000 tcp:5001
-flutter build apk --debug
-adb -s <device_a_id> install -r -g build/app/outputs/flutter-apk/app-debug.apk
-adb -s <device_b_id> install -r -g build/app/outputs/flutter-apk/app-debug.apk
-adb -s <device_a_id> shell am start -n com.example.traillink/.MainActivity
-adb -s <device_b_id> shell am start -n com.example.traillink/.MainActivity
+adb -s "$DEVICE_A" shell pm clear com.example.traillink
+adb -s "$DEVICE_B" shell pm clear com.example.traillink
 ```
 
 PowerShell:
 
 ```powershell
-adb devices
-adb -s <device_a_id> reverse tcp:5000 tcp:5001
-adb -s <device_b_id> reverse tcp:5000 tcp:5001
-flutter build apk --debug
-adb -s <device_a_id> install -r -g build\app\outputs\flutter-apk\app-debug.apk
-adb -s <device_b_id> install -r -g build\app\outputs\flutter-apk\app-debug.apk
-adb -s <device_a_id> shell am start -n com.example.traillink/.MainActivity
-adb -s <device_b_id> shell am start -n com.example.traillink/.MainActivity
-```
-
-For a fresh setup, clear data before launching:
-
-```bash
-adb -s <device_a_id> shell pm clear com.example.traillink
-adb -s <device_b_id> shell pm clear com.example.traillink
+adb -s $DeviceA shell pm clear com.example.traillink
+adb -s $DeviceB shell pm clear com.example.traillink
 ```
 
 ## Build And Diagnostic Commands
