@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:traillink/features/chat/presentation/chat_mode_label.dart';
 import 'package:traillink/features/groups/data/models/group_member_model.dart';
@@ -169,6 +171,34 @@ void main() {
         ),
         'Online Chat - waiting for connection',
       );
+    });
+  });
+
+  group('online member presentation labels', () {
+    test('group details avoids stale Offline wording for cached cloud members',
+        () {
+      final source =
+          File('lib/features/groups/presentation/group_details_screen.dart')
+              .readAsStringSync();
+      final repository = File(
+        'lib/features/trip_context/data/cloud_prepared_trip_repository.dart',
+      ).readAsStringSync();
+      final groupRepository =
+          File('lib/features/groups/data/group_repository.dart')
+              .readAsStringSync();
+      final groupModel =
+          File('lib/features/groups/data/models/group_model.dart')
+              .readAsStringSync();
+
+      expect(source, contains("'offline' => 'Recently active'"));
+      expect(source, contains("'recently_active' => 'Recently active'"));
+      expect(source, isNot(contains("'offline' => 'Offline'")));
+      expect(repository, contains("'role': memberRole"));
+      expect(repository, contains("'presence_status': 'recently_active'"));
+      expect(repository, contains('_currentMemberRole'));
+      expect(groupRepository, contains('_preserveLocalRole'));
+      expect(groupRepository, contains("cachedRole == 'owner'"));
+      expect(groupModel, contains('GroupModel copyWith'));
     });
   });
 }

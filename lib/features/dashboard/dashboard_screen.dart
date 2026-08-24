@@ -933,7 +933,7 @@ Color _updatesStatusColor(ModeState state, TripSessionModel? trip) {
 String _identityLabel(AuthAccessState state) {
   return switch (state) {
     AuthAccessState.authenticatedOnline => 'Internet account ready',
-    AuthAccessState.authenticatedOfflineCached => 'Saved profile',
+    AuthAccessState.authenticatedOfflineCached => 'Local profile',
     AuthAccessState.guestOffline => 'Local Profile',
     AuthAccessState.unauthenticated => 'Identity Needed',
   };

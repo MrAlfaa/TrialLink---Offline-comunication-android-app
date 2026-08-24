@@ -73,5 +73,28 @@ void main() {
       expect(backendRoutes, contains("router.delete('/:groupId'"));
       expect(flutterRepository, contains('archiveGroup'));
     });
+
+    test('owner trip delete clears channel and membership cache', () {
+      final management = File(
+        'lib/features/trip_context/presentation/trip_management_screen.dart',
+      ).readAsStringSync();
+      final contextService = File(
+        'lib/features/trip_context/data/trip_context_service.dart',
+      ).readAsStringSync();
+      final tripRepository = File(
+        'lib/features/trip/data/trip_session_repository.dart',
+      ).readAsStringSync();
+
+      expect(management, contains('Delete Trip'));
+      expect(management, contains('service.canDeleteTrip(trip.tripId)'));
+      expect(contextService, contains('Only the trip owner can delete this trip.'));
+      expect(contextService, contains("stopActiveSession(reason: 'delete_trip')"));
+      expect(tripRepository, contains('deleteTripLocal'));
+      expect(tripRepository, contains("'offline_channel_members'"));
+      expect(tripRepository, contains("'cloud_trip_member_devices'"));
+      expect(tripRepository, contains("'offline_channels'"));
+      expect(tripRepository, contains("'trip_sessions'"));
+      expect(tripRepository, contains("'active_offline_channel_id'"));
+    });
   });
 }

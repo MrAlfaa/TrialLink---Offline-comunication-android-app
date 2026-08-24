@@ -127,7 +127,9 @@ class _ChatHubScreenState extends ConsumerState<ChatHubScreen> {
                             _MessageTab.cloud =>
                               _CloudGroupsPane(groupsState: groupsState),
                             _MessageTab.offline => _OfflineChannelsPane(
-                                channelsValue: channelsValue),
+                                channelsValue: channelsValue,
+                                activeTrip: trip,
+                              ),
                             _MessageTab.recent => const _RecentPane(),
                           },
                         ),
@@ -577,29 +579,37 @@ class _CloudGroupTile extends StatelessWidget {
 }
 
 class _OfflineChannelsPane extends StatelessWidget {
-  const _OfflineChannelsPane({required this.channelsValue});
+  const _OfflineChannelsPane({
+    required this.channelsValue,
+    required this.activeTrip,
+  });
 
   final AsyncValue<List<OfflineChannelModel>> channelsValue;
+  final TripSessionModel? activeTrip;
 
   @override
   Widget build(BuildContext context) {
     return channelsValue.when(
       data: (channels) {
-        if (channels.isEmpty) {
+        final visibleChannels = _channelsForActiveOfflineTrip(channels);
+        if (visibleChannels.isEmpty) {
           return const _EmptyMessagesState(
             key: ValueKey('offline-empty'),
             icon: Icons.hub_rounded,
-            title: 'No offline channels yet',
-            message: 'Create or join a channel before entering remote areas.',
+            title: 'No offline chat ready',
+            message: 'Create or join an offline trip before entering remote areas.',
           );
         }
         return Column(
           key: const ValueKey('offline-channels'),
-          children: channels
+          children: visibleChannels
               .map(
                 (channel) => Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: _OfflineChannelTile(channel: channel),
+                  child: _OfflineChannelTile(
+                    channel: channel,
+                    activeTrip: activeTrip,
+                  ),
                 ),
               )
               .toList(),
@@ -620,15 +630,35 @@ class _OfflineChannelsPane extends StatelessWidget {
       ),
     );
   }
+
+  List<OfflineChannelModel> _channelsForActiveOfflineTrip(
+    List<OfflineChannelModel> channels,
+  ) {
+    final trip = activeTrip;
+    if (trip == null || trip.mode != 'offline') return const [];
+    final activeChannelId = trip.activeChannelId ?? trip.offlineChannelId;
+    return channels.where((channel) {
+      final matchesTrip = channel.tripId == trip.tripId;
+      final matchesChannel =
+          activeChannelId != null && channel.channelId == activeChannelId;
+      final matchesCode = channel.channelCode == trip.channelCode;
+      return matchesTrip || matchesChannel || matchesCode;
+    }).toList();
+  }
 }
 
 class _OfflineChannelTile extends StatelessWidget {
-  const _OfflineChannelTile({required this.channel});
+  const _OfflineChannelTile({
+    required this.channel,
+    required this.activeTrip,
+  });
 
   final OfflineChannelModel channel;
+  final TripSessionModel? activeTrip;
 
   @override
   Widget build(BuildContext context) {
+    final title = _displayTitle;
     return Card(
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
@@ -655,7 +685,7 @@ class _OfflineChannelTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      channel.channelName,
+                      title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium,
@@ -695,6 +725,19 @@ class _OfflineChannelTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String get _displayTitle {
+    final trip = activeTrip;
+    if (trip == null || trip.mode != 'offline') return channel.channelName;
+    final activeChannelId = trip.activeChannelId ?? trip.offlineChannelId;
+    final isActiveTripChannel = channel.tripId == trip.tripId ||
+        (activeChannelId != null && channel.channelId == activeChannelId) ||
+        channel.channelCode == trip.channelCode;
+    if (!isActiveTripChannel || trip.tripName.trim().isEmpty) {
+      return channel.channelName;
+    }
+    return trip.tripName;
   }
 }
 

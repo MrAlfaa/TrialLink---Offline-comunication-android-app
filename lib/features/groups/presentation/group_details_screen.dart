@@ -464,8 +464,9 @@ class _MembersTab extends StatelessWidget {
       'online' => 'Online',
       'nearby' => 'Nearby',
       'disconnected' => 'Disconnected',
-      'offline' => 'Offline',
-      _ => 'Unknown presence',
+      'offline' => 'Recently active',
+      'recently_active' => 'Recently active',
+      _ => 'Member',
     };
     return '${member.memberRole} - ${member.membershipStatus} - $presence';
   }

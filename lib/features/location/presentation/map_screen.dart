@@ -120,7 +120,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           latitude: location.latitude,
           longitude: location.longitude,
           title: location.userName,
-          subtitle: '${location.freshness.label} - ${location.source}',
+          subtitle:
+              '${location.freshness.label} - ${_sourceLabel(location.source, modeState.effectiveMode)}',
           color: _colorFor(location.freshness),
           icon: Icons.person_pin_circle_rounded,
         ),
@@ -271,7 +272,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       title: Text(location.userName),
                       subtitle: Text(
                         '${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)}\n'
-                        '${DateFormat.jm().format(location.capturedAt)} - ${location.source}',
+                        '${DateFormat.jm().format(location.capturedAt)} - ${_sourceLabel(location.source, modeState.effectiveMode)}',
                       ),
                       trailing:
                           LocationFreshnessChip(freshness: location.freshness),
@@ -354,6 +355,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       LocationFreshness.stale => AppColors.danger,
     };
   }
+}
+
+String _sourceLabel(String source, EffectiveMode mode) {
+  final normalized = source.toLowerCase();
+  if (normalized == 'peer') {
+    return mode == EffectiveMode.online
+        ? 'Last saved nearby location'
+        : 'Nearby phone';
+  }
+  if (normalized == 'online' || normalized == 'cloud') {
+    return 'Online update';
+  }
+  return 'Saved location';
 }
 
 class _MapControls extends StatelessWidget {

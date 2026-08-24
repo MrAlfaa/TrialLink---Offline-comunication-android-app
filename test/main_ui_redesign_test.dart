@@ -61,10 +61,29 @@ void main() {
               OfflineChannelModel(
                 channelId: 'channel-1',
                 channelCode: 'TL-OFF-82KD',
-                channelName: 'Knuckles Offline',
+                channelName: 'Main Team Channel',
+                tripId: 'trip-1',
                 createdByUserId: 'local-1',
                 createdAt: DateTime(2026),
                 isActive: true,
+              ),
+              OfflineChannelModel(
+                channelId: 'old-channel',
+                channelCode: 'TL-P56R9',
+                channelName: 'Main Team Channel',
+                tripId: 'old-trip',
+                createdByUserId: 'local-1',
+                createdAt: DateTime(2026),
+                isActive: true,
+              ),
+              OfflineChannelModel(
+                channelId: 'online-support-channel',
+                channelCode: 'TL-ONLI-UEXF2',
+                channelName: 'Main Team Channel',
+                tripId: 'online-trip',
+                createdByUserId: 'local-1',
+                createdAt: DateTime(2026),
+                isActive: false,
               ),
             ],
           ),
@@ -125,6 +144,8 @@ void main() {
     expect(find.text('Offline Chats'), findsOneWidget);
     expect(find.text('Knuckles Offline'), findsWidgets);
     expect(find.text('TL-OFF-82KD'), findsWidgets);
+    expect(find.text('TL-P56R9'), findsNothing);
+    expect(find.text('TL-ONLI-UEXF2'), findsNothing);
   });
 
   testWidgets('chat header uses compact chips instead of a large banner',

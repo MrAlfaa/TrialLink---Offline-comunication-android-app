@@ -74,6 +74,7 @@ async function run() {
   assert.ok(createdData.trip.tripId);
   assert.ok(createdData.channel.channelId);
   assert.ok(createdData.chatRoom.chatId);
+  assert.match(createdData.group.groupCode, /^TL-ONLI-[A-Z0-9]{5}$/);
   assert.equal(createdData.trip.primaryChannelId, createdData.channel.channelId);
   assert.equal(createdData.channel.channelCode, createdData.group.groupCode);
   assert.equal(createdData.roster.length, 1);

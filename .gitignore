@@ -16,12 +16,13 @@ backend/npm-debug.log*
 backend/yarn-debug.log*
 backend/yarn-error.log*
 backend/server.*.log
-docs/
 
 # QA / physical-device test evidence
 # Keep generated screenshots, UI dumps, logcat files, and run outputs out of git.
 # Do not ignore all *.png/*.xml globally because app assets and source files may use them.
 docs/qa/
+docs/superpowers/
+docs/testing/
 qa/
 evidence/
 test_evidence/
@@ -41,6 +42,11 @@ ui-*.xml
 *.mp4
 *.webm
 *.mkv
+
+# Local developer/demo utilities
+# Keep machine-specific launchers (for example scrcpy helpers) out of Git.
+tools/
+
 # IDE/OS
 .idea/
 .vscode/

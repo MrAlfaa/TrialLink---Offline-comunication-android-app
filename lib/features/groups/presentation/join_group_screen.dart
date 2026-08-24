@@ -64,7 +64,7 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Ask the trip owner for a TrailLink code such as TL-8F3K2.',
+              'Ask the trip owner for a TrailLink code such as TL-ONLI-8F3K2.',
               style: Theme.of(context).textTheme.bodyLarge,
             ),
             const SizedBox(height: 18),
@@ -84,8 +84,9 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
                         ),
                         validator: (value) {
                           final code = value?.trim().toUpperCase() ?? '';
-                          if (!RegExp(r'^TL-[A-Z0-9]{5}$').hasMatch(code)) {
-                            return 'Enter a valid code like TL-8F3K2';
+                          if (!RegExp(r'^TL-(?:[A-Z0-9]{5}|ONLI-[A-Z0-9]{5})$')
+                              .hasMatch(code)) {
+                            return 'Enter a valid code like TL-ONLI-8F3K2';
                           }
                           return null;
                         },

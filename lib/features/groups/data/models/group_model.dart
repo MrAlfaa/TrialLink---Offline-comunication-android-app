@@ -34,6 +34,27 @@ class GroupModel {
   bool get isLatestKnown => lastSyncedAt != null || syncState == 'synced';
   bool get isArchived => status == 'archived';
 
+  GroupModel copyWith({
+    String? memberRole,
+  }) {
+    return GroupModel(
+      id: id,
+      groupName: groupName,
+      groupCode: groupCode,
+      createdBy: createdBy,
+      description: description,
+      status: status,
+      memberRole: memberRole ?? this.memberRole,
+      joinedAt: joinedAt,
+      memberCount: memberCount,
+      source: source,
+      syncState: syncState,
+      lastSyncedAt: lastSyncedAt,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+    );
+  }
+
   factory GroupModel.fromJson(Map<String, dynamic> json) {
     return GroupModel(
       id: (json['id'] ?? json['_id']).toString(),

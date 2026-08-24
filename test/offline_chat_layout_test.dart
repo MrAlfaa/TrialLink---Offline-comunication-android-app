@@ -15,6 +15,9 @@ void main() {
       final inputSource = File(
         'lib/features/offline_chat/presentation/widgets/offline_chat_input_bar.dart',
       ).readAsStringSync();
+      final bubbleSource = File(
+        'lib/features/offline_chat/presentation/widgets/offline_message_bubble.dart',
+      ).readAsStringSync();
 
       expect(source, contains("ValueKey('offline-chat-screen')"));
       expect(source, contains("ValueKey('offline-chat-message-area')"));
@@ -30,6 +33,8 @@ void main() {
       expect(inputSource, isNot(contains('maxComposerHeight')));
       expect(inputSource, isNot(contains('minHeight: 126')));
       expect(inputSource, isNot(contains('maxHeight:')));
+      expect(bubbleSource, isNot(contains('Saved profile')));
+      expect(bubbleSource, contains("'authenticated_cached' => 'Teammate'"));
     });
 
     testWidgets('active channel with zero messages keeps composer visible',

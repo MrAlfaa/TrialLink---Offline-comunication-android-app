@@ -56,8 +56,9 @@ class GroupRepository {
     final cached = await _local.loadGroup(groupId);
     try {
       final group = await _api.getGroup(groupId);
-      await _local.upsertGroups([group]);
-      return group;
+      final resolved = _preserveLocalRole(group, cached);
+      await _local.upsertGroups([resolved]);
+      return resolved;
     } catch (_) {
       if (cached != null) return cached;
       rethrow;
@@ -134,5 +135,18 @@ class GroupRepository {
       return 'Backend not reachable.';
     }
     return 'Something went wrong. Please try again.';
+  }
+
+  GroupModel _preserveLocalRole(GroupModel remote, GroupModel? cached) {
+    final cachedRole = cached?.memberRole;
+    final remoteRole = remote.memberRole;
+    if (cachedRole == null || cachedRole.isEmpty) return remote;
+    if (remoteRole == null || remoteRole.isEmpty) {
+      return remote.copyWith(memberRole: cachedRole);
+    }
+    if (cachedRole == 'owner' && remoteRole != 'owner') {
+      return remote.copyWith(memberRole: cachedRole);
+    }
+    return remote;
   }
 }

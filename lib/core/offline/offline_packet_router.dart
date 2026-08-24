@@ -21,6 +21,7 @@ import '../identity/auth_access_controller.dart';
 import '../identity/current_user_actor.dart';
 import '../identity/local_identity_repository.dart';
 import '../notifications/trail_notification_service.dart';
+import 'offline_relay_service.dart';
 
 class OfflinePacketRouterState {
   const OfflinePacketRouterState({
@@ -84,6 +85,7 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
     required Stream<String> packetStream,
     CurrentUserActor? currentActor,
     BridgeEngine? bridgeEngine,
+    OfflineRelayService? relayService,
   })  : _channelRepository = channelRepository,
         _chatRepository = chatRepository,
         _emergencyRepository = emergencyRepository,
@@ -93,6 +95,7 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
         _metricsRecorder = metricsRecorder ?? ConnectivityMetricsRecorder(),
         _currentActor = currentActor,
         _bridgeEngine = bridgeEngine,
+        _relayService = relayService,
         super(const OfflinePacketRouterState()) {
     _subscription = packetStream.listen(_handlePacket);
   }
@@ -105,6 +108,7 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
   final P2PSessionService? _p2pSessionService;
   final ConnectivityMetricsRecorder _metricsRecorder;
   final BridgeEngine? _bridgeEngine;
+  final OfflineRelayService? _relayService;
   CurrentUserActor? _currentActor;
   late final StreamSubscription<String> _subscription;
 
@@ -206,6 +210,9 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
           currentUser: actor,
         ))
             .message;
+        if (packet.packetType == 'ack') {
+          await _relayPacketIfNeeded(packet, activeChannel.channelCode, actor);
+        }
         if (packet.packetType == 'text' && !_isFromActor(packet, actor)) {
           unawaited(
             TrailNotificationService.instance.notifyOfflineChatMessage(
@@ -225,6 +232,7 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
           currentUser: actor.toUserModel(),
         );
         await _tryBridge(packet);
+        await _relayPacketIfNeeded(packet, activeChannel.channelCode, actor);
         result = emergencyResult.message;
         state = state.copyWith(
           lastNotice: result,
@@ -258,6 +266,7 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
           currentUser: actor.toUserModel(),
         );
         await _tryBridge(packet);
+        await _relayPacketIfNeeded(packet, activeChannel.channelCode, actor);
         break;
       case 'heartbeat':
         await _p2pSessionService?.updateHeartbeat(
@@ -273,6 +282,7 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
           channelId: packet.channelId,
           channelCode: packet.channelCode,
         );
+        await _relayPacketIfNeeded(packet, activeChannel.channelCode, actor);
         result = 'Heartbeat received.';
         break;
       case 'peer_hello':
@@ -339,6 +349,34 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
     }
   }
 
+  Future<void> _relayPacketIfNeeded(
+    OfflinePacketModel packet,
+    String activeChannelCode,
+    CurrentUserActor actor,
+  ) async {
+    try {
+      final result = await _relayService?.relayIfNeeded(
+        packet: packet,
+        activeChannelCode: activeChannelCode,
+        currentActor: actor,
+      );
+      if (result != null && result.sentCount > 0) {
+        _debugRouter(
+          'relayed',
+          packet: packet,
+          reason:
+              '${result.action}: sent=${result.sentCount} failed=${result.failedCount}',
+        );
+      }
+    } catch (error) {
+      _debugRouter(
+        'relay_failed',
+        packet: packet,
+        reason: error.toString(),
+      );
+    }
+  }
+
   Future<void> _handleTripSessionLeave(OfflinePacketModel packet) async {
     final senderLocalId = packet.payload['senderLocalId']?.toString();
     await _p2pSessionService?.markPeerDisconnectedByLocalId(
@@ -358,7 +396,8 @@ class OfflinePacketRouter extends StateNotifier<OfflinePacketRouterState> {
     return packet.senderId == actor.id ||
         packet.senderId == actor.localUserId ||
         packet.senderLocalId == actor.localUserId ||
-        packet.senderBackendId == actor.backendUserId;
+        (packet.senderBackendId != null &&
+            packet.senderBackendId == actor.backendUserId);
   }
 
   @override
@@ -383,6 +422,7 @@ final offlinePacketRouterProvider =
     packetStream: nearbyRepository.packetReceivedStream,
     currentActor: _currentRouterActor(ref),
     bridgeEngine: ref.read(bridgeEngineProvider),
+    relayService: OfflineRelayService(nearbyRepository: nearbyRepository),
   );
 
   ref.listen(authControllerProvider, (_, next) {
