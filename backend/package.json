@@ -6,20 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js",
-    "test:phase02": "node scripts/phase02-api-smoke.js",
-    "test:phase03": "node scripts/phase03-chat-smoke.js",
-    "test:phase09": "node scripts/phase09-emergency-smoke.js",
-    "test:phase10": "node scripts/phase10-location-smoke.js",
-    "test:phase12": "node scripts/phase12-voice-smoke.js",
-    "test:phase13e": "node scripts/phase13e-bridge-smoke.js",
-    "test:phase13f": "node scripts/phase13f-identity-bootstrap-smoke.js",
-    "test:phase13g": "node scripts/phase13g-group-member-management-smoke.js",
-    "test:phase13h": "node scripts/phase13h-chat-media-smoke.js",
-    "test:phase14g": "node scripts/phase14g-trip-context-smoke.js",
-    "test:phase14j": "node scripts/phase14j-cloud-prepared-metadata-smoke.js",
-    "test:phase14s": "node scripts/phase14s-network-probe-smoke.js",
-    "qa:clean-user": "node scripts/qa-clean-user-data.js"
+    "start": "node src/server.js"
   },
   "keywords": [
     "traillink",

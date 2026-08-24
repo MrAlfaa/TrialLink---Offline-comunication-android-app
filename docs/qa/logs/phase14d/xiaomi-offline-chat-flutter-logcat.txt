@@ -1,6 +1,0 @@
-05-09 15:55:58.519  2237  2237 E FileUtils: err write to mi_exception_log
-05-09 15:56:00.072  2248  2248 E FileUtils: err write to mi_exception_log
-05-09 15:56:01.157  3480  7602 E SLM-SRV-SLAService: java.io.FileNotFoundException: /sys/class/thermal/thermal_message/balance_mode: open failed: ENOENT (No such file or directory)
-05-09 15:56:01.157  3480  7602 E SLM-SRV-SLAService: Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
-05-09 15:56:01.158  3480  7602 E SLM-SRV-SLAService: java.io.FileNotFoundException: /sys/class/thermal/thermal_message/balance_mode: open failed: ENOENT (No such file or directory)
-05-09 15:56:01.158  3480  7602 E SLM-SRV-SLAService: Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)

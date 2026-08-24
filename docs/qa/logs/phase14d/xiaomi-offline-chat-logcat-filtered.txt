@@ -1,6 +1,0 @@
-05-09 15:55:36.459  1640  1972 E WifiVendorHal: getWifiLinkLayerStats_1_5_Internal(l.1176) failed {.code = ERROR_UNKNOWN, .description = unknown}
-05-09 15:55:37.457  1640  1972 E WifiVendorHal: getWifiLinkLayerStats_1_5_Internal(l.1176) failed {.code = ERROR_UNKNOWN, .description = unknown}
-05-09 15:55:37.852  1640  1688 E FileUtils: err open mi_exception_log errno=2
-05-09 15:55:37.852  1640  1688 E FileUtils: err write to mi_exception_log
-05-09 15:55:38.459  1640  1972 E WifiVendorHal: getWifiLinkLayerStats_1_5_Internal(l.1176) failed {.code = ERROR_UNKNOWN, .description = unknown}
-05-09 15:55:38.829  1640  1853 E WifiVendorHal: getWifiLinkLayerStats_1_5_Internal(l.1176) failed {.code = ERROR_UNKNOWN, .description = unknown}

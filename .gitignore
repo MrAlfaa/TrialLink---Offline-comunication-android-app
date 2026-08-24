@@ -5,6 +5,7 @@
 .packages
 build/
 coverage/
+/test/
 
 # Environment
 .env
@@ -16,6 +17,8 @@ backend/npm-debug.log*
 backend/yarn-debug.log*
 backend/yarn-error.log*
 backend/server.*.log
+/backend/uploads/
+/backend/scripts/
 
 # QA / physical-device test evidence
 # Keep generated screenshots, UI dumps, logcat files, and run outputs out of git.
@@ -23,6 +26,7 @@ backend/server.*.log
 docs/qa/
 docs/superpowers/
 docs/testing/
+/docs/
 qa/
 evidence/
 test_evidence/
@@ -46,6 +50,9 @@ ui-*.xml
 # Local developer/demo utilities
 # Keep machine-specific launchers (for example scrcpy helpers) out of Git.
 tools/
+
+# Local Android/Gradle diagnostics
+/android/.kotlin/
 
 # IDE/OS
 .idea/

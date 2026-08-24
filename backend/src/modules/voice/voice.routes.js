@@ -1,4 +1,5 @@
 const express = require('express');
+const fs = require('fs');
 const multer = require('multer');
 const path = require('path');
 
@@ -10,6 +11,7 @@ const {
 } = require('./voice.validation');
 
 const uploadDir = path.join(__dirname, '../../../uploads/voice-notes');
+fs.mkdirSync(uploadDir, { recursive: true });
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
