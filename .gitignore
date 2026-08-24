@@ -42,6 +42,11 @@ ui-*.xml
 *.mp4
 *.webm
 *.mkv
+
+# Local developer/demo utilities
+# Keep machine-specific launchers (for example scrcpy helpers) out of Git.
+tools/
+
 # IDE/OS
 .idea/
 .vscode/
